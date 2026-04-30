@@ -32,6 +32,8 @@ on:
       - '{path_filter}/*.yaml'
       - '{path_filter}/*.yml'
       - '{path_filter}/*.json'
+      - '{path_filter}/*.py'
+      - '{path_filter}/*.txt'
   workflow_call:
 
 env:
@@ -106,6 +108,8 @@ on:
       - '{path_filter}/*.yaml'
       - '{path_filter}/*.yml'
       - '{path_filter}/*.json'
+      - '{path_filter}/*.py'
+      - '{path_filter}/*.txt'
 
 env:
   PROJECT_ID: "{project_id}"
@@ -166,6 +170,8 @@ on:
       - '{path_filter}/*.yaml'
       - '{path_filter}/*.yml'
       - '{path_filter}/*.json'
+      - '{path_filter}/*.py'
+      - '{path_filter}/*.txt'
 
 env:
   PROJECT_ID: "{project_id}"
@@ -269,6 +275,20 @@ def _get_github_details(agent_dir: str) -> tuple[str | None, str | None]:
     except Exception:
         pass
     return None, None
+
+
+def _repo_relative_path(path: str, git_root: str) -> str:
+    """Returns a POSIX-style path to path relative to the Git repo root."""
+    abs_path = os.path.abspath(path)
+    abs_git_root = os.path.abspath(git_root)
+
+    if os.path.commonpath([abs_git_root, abs_path]) != abs_git_root:
+        raise ValueError("The app directory must be inside the Git repository.")
+
+    rel_path = os.path.relpath(abs_path, abs_git_root)
+    if rel_path == ".":
+        return "."
+    return rel_path.replace(os.sep, "/")
 
 
 def _auto_setup_wif(
@@ -563,11 +583,10 @@ def init_github_action(args: argparse.Namespace) -> None:
             "or use --auto-create-wif to let the CLI generate them for you."
         )
 
-    # Generate the path string. If they used an absolute path like
-    # `/Users/.../pilot`, just use `pilot/**`
-    agent_basename = os.path.basename(agent_dir.rstrip(os.sep))
-    path_filter = f"{agent_basename}/**" if agent_dir != "." else "**"
-    github_context_path = agent_basename if agent_dir != "." else "."
+    github_context_path = _repo_relative_path(agent_dir, git_root)
+    path_filter = (
+        "**" if github_context_path == "." else f"{github_context_path}/**"
+    )
 
     # Configure auth blocks
     auth_env = (
