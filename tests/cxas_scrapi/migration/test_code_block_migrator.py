@@ -21,6 +21,7 @@ import pytest
 from cxas_scrapi.migration.code_block_migrator import (
     CodeBlockMigrator,
 )
+from cxas_scrapi.migration.data_models import IRTool, MigrationStatus
 
 
 @pytest.fixture
@@ -65,10 +66,13 @@ def use_tool():
     tools.my_tool.my_op({"param": "value"})
 """
     tool_map = {
-        "tool_1": {
-            "type": "TOOLSET",
-            "name": "projects/p1/locations/l1/apps/a1/tools/toolset_1",
-        }
+        "tool_1": IRTool(
+            id="tool_1",
+            type="TOOLSET",
+            name="projects/p1/locations/l1/apps/a1/tools/toolset_1",
+            payload={},
+            status=MigrationStatus.COMPILED
+        )
     }
     tool_display_name_map = {"my_tool": "tool_1"}
 

@@ -67,11 +67,11 @@ def test_link_and_finalize_topology():
 
     # Verify that update_agent was called for Agent1 to link Agent2
     mock_ps_agents.update_agent.assert_called_once_with(
-        agent_id="projects/123/apps/456/agents/agent1",
+        agent_name="projects/123/apps/456/agents/agent1",
         child_agents=["projects/123/apps/456/agents/agent2"],
     )
     # And update_app was called to set root agent
     mock_ps_apps.update_app.assert_called_once_with(
-        app_id="projects/123/apps/456",
-        rootAgent="projects/123/apps/456/agents/agent1",
+        app_name="projects/123/apps/456",
+        root_agent="projects/123/apps/456/agents/agent1",
     )

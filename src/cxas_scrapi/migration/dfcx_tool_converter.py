@@ -262,7 +262,9 @@ class DFCXToolConverter:
             )
             data_store_connections = data_store_spec.get("dataStoreConnections")
 
-            if data_store_connections:
+            if data_store_connections and data_store_connections[0].get(
+                "dataStore"
+            ):
                 logger.info(
                     f"  -> Migrating fully configured Data Store tool "
                     f"'{display_name}'."

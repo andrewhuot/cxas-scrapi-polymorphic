@@ -171,7 +171,7 @@ class CXASTopologyLinker:
                 f"{len(child_resources_to_add)} child(ren)..."
             )
             ps_agents.update_agent(
-                agent_id=parent_resource,
+                agent_name=parent_resource,
                 child_agents=list(child_resources_to_add),
             )
             reporter.log_action(
@@ -279,7 +279,7 @@ class CXASTopologyLinker:
         if root_agent_resource:
             logger.info(f"Setting '{root_display_name}' as the Root Agent...")
             self.ps_apps.update_app(
-                app_id=full_app_name, rootAgent=root_agent_resource
+                app_name=full_app_name, root_agent=root_agent_resource
             )
             self.reporter.log_action(
                 "Routing", f"Set Root Agent to {root_display_name}"

@@ -126,8 +126,8 @@ class ToolCallTransformer(ast.NodeTransformer):
             if dfcx_id and dfcx_id in self.tool_map:
                 tool_info = self.tool_map[dfcx_id]
 
-                if tool_info["type"] == "TOOLSET":
-                    ps_resource_name = tool_info["name"]
+                if tool_info.type == "TOOLSET":
+                    ps_resource_name = tool_info.name
                     ps_toolset_id = ps_resource_name.split("/")[-1]
 
                     self.dependencies.add(ps_resource_name)
@@ -163,6 +163,22 @@ class ToolCallTransformer(ast.NodeTransformer):
         # 1. Visit children FIRST
         self.generic_visit(node)
 
+        # Strip DFCX-specific decorators
+        new_decorators = []
+        for dec in node.decorator_list:
+            if isinstance(dec, ast.Name):
+                if dec.id in [
+                    "Action", "Handler", "system", "action", "handler"
+                ]:
+                    continue
+            elif isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
+                if dec.func.id in [
+                    "Action", "Handler", "system", "action", "handler"
+                ]:
+                    continue
+            new_decorators.append(dec)
+        node.decorator_list = new_decorators
+
         # 2. Fix/Add Return Type Annotation
         should_set_dict = False
 
@@ -185,13 +201,13 @@ class ToolCallTransformer(ast.NodeTransformer):
         if should_set_dict:
             node.returns = ast.Name(id="dict", ctx=ast.Load())
 
-            # Ensure it returns a dict at the end if it didn't have a return
-            # or returned None
-            last_stmt = node.body[-1] if node.body else None
-            if not isinstance(last_stmt, ast.Return):
-                node.body.append(ast.Return(value=ast.Dict(keys=[], values=[])))
-            elif isinstance(last_stmt, ast.Return) and last_stmt.value is None:
-                last_stmt.value = ast.Dict(keys=[], values=[])
+        # Ensure it returns a dict at the end if it didn't have a return
+        # or returned None
+        last_stmt = node.body[-1] if node.body else None
+        if not isinstance(last_stmt, ast.Return):
+            node.body.append(ast.Return(value=ast.Dict(keys=[], values=[])))
+        elif isinstance(last_stmt, ast.Return) and last_stmt.value is None:
+            last_stmt.value = ast.Dict(keys=[], values=[])
 
         return node
 

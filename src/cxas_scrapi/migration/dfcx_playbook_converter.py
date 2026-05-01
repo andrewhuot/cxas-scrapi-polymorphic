@@ -183,6 +183,9 @@ class DFCXPlaybookConverter:
             instruction_text,
         )
 
+        referenced_tools = []
+        referenced_toolsets = []
+
         if master_inline_action_map:
             for func_name, ps_resource_name in master_inline_action_map.items():
                 pattern = r"(?:`?)\b" + re.escape(func_name) + r"\b(?:`?)"
@@ -208,6 +211,7 @@ class DFCXPlaybookConverter:
                     instruction_text = re.sub(
                         pattern, replacement, instruction_text
                     )
+                    referenced_tools.append(ps_resource_name)
                     self.reporter.log_transformation(
                         "Instruction Rewrite",
                         func_name,
@@ -215,20 +219,15 @@ class DFCXPlaybookConverter:
                         "Mapped Python Function to Tool",
                     )
 
-        referenced_tools = []
-        referenced_toolsets = []
-
         if "referencedTools" in cx_playbook:
             for cx_tool_id in cx_playbook["referencedTools"]:
                 if cx_tool_id in tool_map:
                     tool = tool_map[cx_tool_id]
                     if tool.type == "TOOLSET":
-                        referenced_toolsets.append(
-                            {
-                                "toolset": tool.name,
-                                "toolIds": tool.operation_ids,
-                            }
-                        )
+                        ts_payload = {"toolset": tool.name}
+                        if tool.operation_ids:
+                            ts_payload["tool_ids"] = tool.operation_ids
+                        referenced_toolsets.append(ts_payload)
                     else:
                         referenced_tools.append(tool.name)
 

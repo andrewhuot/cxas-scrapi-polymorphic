@@ -146,6 +146,13 @@ class MigrationService:
 
 
 
+        logger.info("\nPre-processing text fields (Playbook -> agent)...")
+        self._preprocess_text_fields(self.source_agent_data)
+        self.reporter.log_action(
+            "Pre-processing",
+            "Executed global text replacement: 'playbook' -> 'agent'"
+        )
+
         logger.info(f"Starting Hybrid Migration for: {config.target_name}")
 
         # --- 1. Populate IR Metadata & Predictable IDs ---
@@ -193,6 +200,10 @@ class MigrationService:
                     playbook_descriptions[pb_name] = ""
                 else:
                     playbook_descriptions[pb_name] = desc if desc else ""
+                    if desc:
+                        logger.info(
+                            f"***Generated agent description***: {desc}"
+                        )
 
         # --- 3. Populate IR Variables ---
         final_declarations, parameter_name_map = (
@@ -203,33 +214,100 @@ class MigrationService:
         for param in final_declarations:
             self.ir.parameters[param["name"]] = param
 
+        if "mock_mode" not in self.ir.parameters:
+            logger.info(
+                "  -> Injecting global 'mock_mode' boolean variable for tool "
+                "testing."
+            )
+            self.ir.parameters["mock_mode"] = {
+                "name": "mock_mode",
+                "description": (
+                    "Global toggle. If true, Python tool wrappers will "
+                    "return mock data instead of executing "\
+                    "real backend API calls."
+                ),
+                "schema": {
+                    "type": "BOOLEAN",
+                    "default": {
+                        "bool_value": False
+                    }
+                }
+            }
+
         # --- 4. Populate Standard Tools & Webhooks into IR ---
         logger.info("Processing Standard Tools and Webhooks...")
-        for cx_tool in self.source_agent_data.tools:
-            res = self.tool_converter.convert_cx_tool_to_ps_resource(cx_tool)
-            if res:
-                self.ir.tools[res["id"]] = IRTool(
-                    id=res["id"],
-                    name=f"{target_app_resource_name}/tools/{res['id']}",
-                    type=res["type"],
-                    payload=res["payload"],
-                    operation_ids=res.get("operation_ids", []),
-                    status=MigrationStatus.COMPILED,
+        cx_source_to_ir_tool_map = {}
+        cx_tool_display_name_to_id_map = {}
+        created_tool_ids = set()
+        created_toolset_ids = set()
+
+        def process_resource(cx_resource, is_webhook=False):
+            if is_webhook:
+                res = self.tool_converter.convert_webhook_to_openapi_toolset(
+                    cx_resource
+                )
+            else:
+                res = self.tool_converter.convert_cx_tool_to_ps_resource(
+                    cx_resource
+                )
+            if not res:
+                return
+
+            display_name = cx_resource.get("displayName")
+            if display_name:
+                cx_tool_display_name_to_id_map[display_name] = cx_resource.get(
+                    "name"
                 )
 
-        for cx_webhook in self.source_agent_data.webhooks:
-            res = self.tool_converter.convert_webhook_to_openapi_toolset(
-                cx_webhook
+            base_id = res["id"]
+            final_id = base_id
+            existing_ids = (
+                created_toolset_ids
+                if res["type"] == "TOOLSET"
+                else created_tool_ids
             )
-            if res:
-                self.ir.tools[res["id"]] = IRTool(
-                    id=res["id"],
-                    name=f"{target_app_resource_name}/tools/{res['id']}",
-                    type=res["type"],
-                    payload=res["payload"],
-                    operation_ids=res.get("operation_ids", []),
-                    status=MigrationStatus.COMPILED,
-                )
+
+            suffix_counter = 2
+            while final_id in existing_ids:
+                suffix = f"_{suffix_counter}"
+                final_id = f"{base_id[:36 - len(suffix)]}{suffix}"
+                suffix_counter += 1
+
+            existing_ids.add(final_id)
+            res["id"] = final_id
+
+            if "name" in res["payload"]:
+                res["payload"]["name"] = final_id
+            if (
+                "data_store_tool" in res["payload"]
+                and "name" in res["payload"]["data_store_tool"]
+            ):
+                res["payload"]["data_store_tool"]["name"] = final_id
+
+            collection = "toolsets" if res["type"] == "TOOLSET" else "tools"
+            ir_tool = IRTool(
+                id=final_id,
+                name=f"{target_app_resource_name}/{collection}/{final_id}",
+                type=res["type"],
+                payload=res["payload"],
+                operation_ids=res.get("operation_ids", []),
+                status=MigrationStatus.COMPILED,
+            )
+            self.ir.tools[final_id] = ir_tool
+
+            if cx_resource.get("name"):
+                cx_source_to_ir_tool_map[cx_resource["name"]] = ir_tool
+
+        for cx_tool in getattr(self.source_agent_data, "tools", []):
+            process_resource(cx_tool, is_webhook=False)
+
+        for cx_webhook in getattr(self.source_agent_data, "webhooks", []):
+            w_val = (
+                cx_webhook.get("value", cx_webhook)
+                if isinstance(cx_webhook, dict)
+                else cx_webhook
+            )
+            process_resource(w_val, is_webhook=True)
 
         # --- 5. Extract Code Blocks ---
         logger.info("Extracting and rewriting Python Code Blocks into IR...")
@@ -239,35 +317,67 @@ class MigrationService:
         migrated_function_names = set()
         function_name_to_tool_map = {}
         tool_display_name_map = {
-            tool["displayName"]: tool["name"]
+            tool.payload.get("displayName")
+            or tool.payload.get("display_name", tool.id): tool.id
             for tool in self.ir.tools.values()
-            if "displayName" in tool
+            if tool.payload
         }
 
-        for cb in code_blocks:
-            code = cb.get("code", "")
-            (
-                extracted_tools,
-                action_to_tool_map,
-                referenced_toolsets,
-            ) = self.code_block_migrator.extract_functions_to_ir(
-                code,
-                existing_tool_ids,
-                migrated_function_names,
-                function_name_to_tool_map,
-                self.ir.tools,
-                tool_display_name_map,
-                target_app_resource_name,
-            )
-            for tool in extracted_tools:
-                self.ir.tools[tool["id"]] = IRTool(
-                    id=tool["id"],
-                    name=tool["name"],
-                    type=tool["type"],
-                    payload=tool["payload"],
-                    status=MigrationStatus.COMPILED,
+        playbook_to_code_tools_map = {}
+        playbook_to_code_dependencies_map = {}
+
+        for playbook in playbooks:
+            playbook_name = playbook["displayName"]
+            playbook_to_code_tools_map[playbook_name] = []
+            playbook_to_code_dependencies_map[playbook_name] = set()
+
+            code = ""
+            if "codeBlock" in playbook:
+                cb_val = playbook["codeBlock"]
+                if isinstance(cb_val, dict) and "code" in cb_val:
+                    code = cb_val["code"]
+                elif isinstance(cb_val, str):
+                    for code_block in code_blocks:
+                        if code_block.get("name") == cb_val:
+                            code = code_block.get("code", "")
+                            break
+
+            if code:
+                (
+                    extracted_tools,
+                    action_to_tool_map,
+                    referenced_toolsets,
+                ) = self.code_block_migrator.extract_functions_to_ir(
+                    code,
+                    existing_tool_ids,
+                    migrated_function_names,
+                    function_name_to_tool_map,
+                    self.ir.tools,
+                    tool_display_name_map,
+                    target_app_resource_name,
                 )
-            master_inline_action_map.update(action_to_tool_map)
+                for tool in extracted_tools:
+                    self.ir.tools[tool["id"]] = IRTool(
+                        id=tool["id"],
+                        name=tool["name"],
+                        type=tool["type"],
+                        payload=tool["payload"],
+                        status=MigrationStatus.COMPILED,
+                    )
+
+                # Link ALL referenced Python tools (new and reused)
+                for _func_name, tool_id in action_to_tool_map.items():
+                    full_tool_name = \
+                        f"{target_app_resource_name}/tools/{tool_id}"
+                    if full_tool_name not in playbook_to_code_tools_map[
+                        pb_name
+                    ]:
+                        playbook_to_code_tools_map[pb_name].append(
+                            full_tool_name
+                        )
+
+                master_inline_action_map.update(action_to_tool_map)
+                playbook_to_code_dependencies_map[pb_name].update(referenced_toolsets)
 
         # --- 6. Compile Playbooks into IR ---
         logger.info("Compiling Playbooks into IR payload...")
@@ -283,7 +393,7 @@ class MigrationService:
             agent_payload = (
                 self.playbook_converter.convert_cx_playbook_to_ps_agent(
                     pb,
-                    self.ir.tools,
+                    cx_source_to_ir_tool_map,
                     generated_desc,
                     parameter_name_map,
                     cx_tool_display_name_to_id_map,
@@ -291,6 +401,26 @@ class MigrationService:
                     self.default_model,
                 )
             )
+
+            # 1. Attach Code Block Python Tools
+            code_tools = playbook_to_code_tools_map.get(playbook_name, [])
+            for code_tool in code_tools:
+                if code_tool not in agent_payload["tools"]:
+                    agent_payload["tools"].append(code_tool)
+
+            # 2. Attach Code Block Toolset Dependencies
+            code_dependencies = playbook_to_code_dependencies_map.get(
+                playbook_name, set()
+            )
+            for dep_toolset_name in code_dependencies:
+                if not any(
+                    toolset_entry.get("toolset") == dep_toolset_name
+                    for toolset_entry in agent_payload["toolsets"]
+                ):
+                    agent_payload["toolsets"].append({
+                        "toolset": dep_toolset_name
+                    })
+
             self.ir.agents[pb_name] = IRAgent(
                 type="PLAYBOOK",
                 display_name=pb_name,
@@ -330,6 +460,9 @@ class MigrationService:
         )
 
         logger.info("MIGRATION COMPLETE!")
+        app_url = f"https://ces.cloud.google.com/projects/{self.project_id}/locations/{self.location}/apps/{self.ir.metadata.app_id}"
+        logger.info(f"ACCESS YOUR CXAS AGENT HERE:\n{app_url}")
+
         self.reporter.export_and_download(
             f"{config.target_name}_migration_report.md"
         )
@@ -385,33 +518,54 @@ class MigrationService:
                     "display_name", tool_id
                 )
 
-                if res_type == "TOOLSET":
-                    logger.info(f"  Creating Toolset: '{display_name}'...")
-                    new_res = self.ps_tools.create_tool(
-                        tool_id=tool_id,
-                        display_name=display_name,
-                        payload=payload["open_api_toolset"],
-                        tool_type="open_api_toolset",
-                        description=payload.get("description", ""),
-                    )
-                else:
-                    logger.info(f"  Creating Tool: '{display_name}'...")
-                    new_res = self.ps_tools.create_tool(
-                        tool_id=tool_id,
-                        display_name=display_name,
-                        payload=payload.get("data_store_tool", {}),
-                        tool_type="data_store_tool",
-                        description=payload.get("description", ""),
-                    )
+                try:
+                    if res_type == "TOOLSET":
+                        logger.info(f"  Creating Toolset: '{display_name}'...")
+                        new_res = self.ps_tools.create_tool(
+                            tool_id=tool_id,
+                            display_name=display_name,
+                            payload=payload["open_api_toolset"],
+                            tool_type="open_api_toolset",
+                            description=payload.get("description", ""),
+                        )
+                    elif res_type == "PYTHON":
+                        logger.info(
+                            f"  Creating Python Tool: '{display_name}'..."
+                        )
+                        new_res = self.ps_tools.create_tool(
+                            tool_id=tool_id,
+                            display_name=display_name,
+                            payload=payload.get("pythonFunction", {}),
+                            tool_type="python_function",
+                            description=payload.get("description", ""),
+                        )
+                    else:
+                        logger.info(
+                            f"  Creating Data Store Tool: '{display_name}'..."
+                        )
+                        new_res = self.ps_tools.create_tool(
+                            tool_id=tool_id,
+                            display_name=display_name,
+                            payload=payload.get("data_store_tool", {}),
+                            tool_type="data_store_tool",
+                            description=payload.get("description", ""),
+                        )
 
-                if new_res and hasattr(new_res, "name"):
-                    tool.status = MigrationStatus.DEPLOYED
-                    self.reporter.log_tool(
-                        res_type, display_name, new_res.name
-                    )
-                else:
+                    if new_res and hasattr(new_res, "name"):
+                        tool.status = MigrationStatus.DEPLOYED
+                        self.reporter.log_tool(
+                            res_type, display_name, new_res.name
+                        )
+                    else:
+                        logger.error(
+                            f"    -> Failed to create {res_type} "
+                            f"'{display_name}'."
+                        )
+                        tool.status = MigrationStatus.FAILED
+                except Exception as e:
                     logger.error(
-                        f"    -> Failed to create {res_type} '{display_name}'."
+                        f"    -> Exception creating {res_type} "
+                        f"'{display_name}': {e}"
                     )
                     tool.status = MigrationStatus.FAILED
 
@@ -470,16 +624,9 @@ class MigrationService:
                 if agent.callbacks:
                     for cb_type, cb_code in agent.callbacks.items():
                         if cb_code:
-                            camel_key = (
-                                re.sub(
-                                    r"_([a-z])",
-                                    lambda m: m.group(1).upper(),
-                                    cb_type,
-                                )
-                                + "s"
-                            )
-                            callback_payload[camel_key] = [
-                                {"pythonCode": cb_code}
+                            key = cb_type + "s"
+                            callback_payload[key] = [
+                                {"python_code": cb_code}
                             ]
 
                 # --- Clean Instruction Syntax & Agent Names ---
@@ -587,7 +734,7 @@ class MigrationService:
                     )
                     or agent.type,
                     "instruction": agent.instruction,
-                    "tools": resolved_tools,
+                    "tools": list(set(resolved_tools)),
                     "toolsets": resolved_toolsets,
                     "model_settings": agent.model_settings
                     or {"model": default_model},
@@ -603,6 +750,14 @@ class MigrationService:
                     elif hasattr(ms, "model"):
                         model_to_use = ms.model
 
+                logger.info(
+                    f"DEBUG TOOLSETS PAYLOAD for {display_name}: "
+                    f"{ps_agent_payload.get('toolsets')}"
+                )
+                logger.info(
+                    f"DEBUG TOOLS PAYLOAD for {display_name}: "
+                    f"{ps_agent_payload.get('tools')}"
+                )
                 new_ps_agent = self.ps_agents.create_agent(
                     display_name=display_name,
                     model=model_to_use,
@@ -694,6 +849,17 @@ class MigrationService:
                 else:
                     # Recurse into nested structures
                     self._preprocess_text_fields(item)
+        elif hasattr(data_structure.__class__, "model_fields"):
+            for key in data_structure.__class__.model_fields.keys():
+                val = getattr(data_structure, key)
+                if isinstance(val, str):
+                    setattr(
+                        data_structure,
+                        key,
+                        re.sub(r"playbook", "agent", val, flags=re.IGNORECASE)
+                    )
+                else:
+                    self._preprocess_text_fields(val)
         return data_structure
 
     async def _process_single_flow(
@@ -862,8 +1028,7 @@ class MigrationService:
                         )
                     elif matched_tool.type == "TOOLSET":
                         ts_entry = {
-                            "toolset": matched_tool.name,
-                            "toolIds": [],
+                            "toolset": matched_tool.name
                         }
                         if ts_entry not in self.ir.agents[flow_name].toolsets:
                             self.ir.agents[flow_name].toolsets.append(ts_entry)
@@ -876,8 +1041,7 @@ class MigrationService:
                     for tool in self.ir.tools.values():
                         if tool.type == "TOOLSET" and op in tool.operation_ids:
                             ts_entry = {
-                                "toolset": tool.name,
-                                "toolIds": [],
+                                "toolset": tool.name
                             }
                             if (
                                 ts_entry
@@ -901,13 +1065,8 @@ class MigrationService:
                 "callbacks", {}
             ).items():
                 if cb_code:
-                    camel_key = (
-                        re.sub(
-                            r"_([a-z])", lambda m: m.group(1).upper(), cb_type
-                        )
-                        + "s"
-                    )
-                    callback_payload[camel_key] = [{"pythonCode": cb_code}]
+                    key = cb_type + "s"
+                    callback_payload[key] = [{"python_code": cb_code}]
 
             display_name = self.ir.agents[flow_name].display_name
             agent_payload = {
@@ -915,14 +1074,14 @@ class MigrationService:
                 "instruction": self.ir.agents[flow_name].instruction,
                 "tools": self.ir.agents[flow_name].tools,
                 "toolsets": self.ir.agents[flow_name].toolsets,
-                "model_settings": {"model": self.default_model},
+                "model_settings": {"model": self.ir.metadata.default_model},
             }
             agent_payload.update(callback_payload)
 
             try:
                 new_agent = self.ps_agents.create_agent(
                     display_name=display_name,
-                    model=self.default_model,
+                    model=self.ir.metadata.default_model,
                     **agent_payload
                 )
                 if new_agent and hasattr(new_agent, "name"):
