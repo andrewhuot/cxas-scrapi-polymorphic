@@ -1,7 +1,6 @@
-import os
-import re
 import pathlib
-import pytest
+import re
+
 import requests
 
 README_PATH = pathlib.Path(__file__).parent.parent.parent / "README.md"
@@ -21,36 +20,41 @@ def is_ignored(url):
 
 def test_readme_links():
     assert README_PATH.exists(), f"README.md not found at {README_PATH}"
-    
+
     with open(README_PATH, "r", encoding="utf-8") as f:
         content = f.read()
-        
+
     links = extract_links(content)
-    
+
     broken_links = []
-    
+
     for link in links:
         if not link or is_ignored(link):
             continue
-            
+
         if is_external(link):
             try:
                 # Using a browser-like User-Agent might help avoid some blocks
                 headers = {'User-Agent': 'Mozilla/5.0'}
                 response = requests.get(link, headers=headers, timeout=5)
                 if response.status_code >= 400:
-                    broken_links.append(f"External: {link} (Status: {response.status_code})")
+                    broken_links.append(
+                        f"External: {link} (Status: {response.status_code})"
+                    )
             except requests.RequestException as e:
                 broken_links.append(f"External: {link} (Error: {e})")
         else:
             # Relative link
             # Remove query params or anchors if any
             clean_link = link.split("?")[0].split("#")[0]
-            
+
             # Path relative to README
             target_path = README_PATH.parent / clean_link
-            
+
             if not target_path.exists():
-                broken_links.append(f"Internal: {link} (Path not found: {target_path})")
-                
-    assert not broken_links, f"Found broken links in README.md:\n" + "\n".join(broken_links)
+                broken_links.append(
+                    f"Internal: {link} (Path not found: {target_path})"
+                )
+
+    msg = "Found broken links in README.md:\n" + "\n".join(broken_links)
+    assert not broken_links, msg
