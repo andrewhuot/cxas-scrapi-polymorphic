@@ -14,6 +14,7 @@
 
 """Unit tests for the eval conversation utility."""
 
+import unittest
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -725,3 +726,122 @@ def test_simulation_evals_get_turns_from_platform(mock_ch_class):
 
     assert len(turns) == 1
     assert turns[0].user == "hello"
+
+class MockProto:
+    def __init__(self, data):
+        self.data = data
+    @staticmethod
+    def to_dict(obj):
+        return obj.data
+
+class TestSimToGolden(unittest.TestCase):
+    def setUp(self):
+        self.app_name = "projects/p/locations/l/apps/a"
+
+        # Create instance without calling __init__ to avoid complex dependency
+        # mocking
+        self.sim_evals = MagicMock(spec=SimulationEvals)
+        self.sim_evals.app_name = self.app_name
+        self.sim_evals.creds = MagicMock()
+
+        # Bind refactored methods to the mock instance so they can be called
+        # internally
+        methods_to_bind = [
+            "export_results_to_golden",
+            "_get_turns",
+            "_get_turns_from_platform",
+            "_get_turns_from_local_trace",
+            "_parse_platform_messages",
+            "_process_platform_chunk",
+            "_handle_text_chunk",
+            "_handle_tool_call_chunk",
+            "_handle_tool_response_chunk",
+            "_handle_agent_transfer_chunk",
+            "_handle_payload_chunk",
+            "_match_tool_response",
+            "_add_agent_text",
+            "_parse_trace_line",
+        ]
+        for method_name in methods_to_bind:
+            method = getattr(SimulationEvals, method_name)
+            setattr(
+                self.sim_evals,
+                method_name,
+                method.__get__(self.sim_evals, SimulationEvals),
+            )
+
+    @patch('cxas_scrapi.evals.simulation_evals.ConversationHistory')
+    def test_export_results_to_golden(self, mock_ch_class):
+        mock_ch = mock_ch_class.return_value
+
+        # Mock conversation data
+        mock_conv_data = {
+            "turns": [
+                {
+                    "messages": [
+                        {"role": "user", "chunks": [{"text": "hello"}]},
+                        {"role": "agent", "chunks": [{"text": "hi there"}]}
+                    ]
+                },
+                {
+                    "messages": [
+                        {"role": "user", "chunks": [{"text": "how are you?"}]},
+                        {"role": "agent", "chunks": [
+                            {"text": "I am good,"},
+                            {
+                                "tool_call": {
+                                    "display_name": "get_weather",
+                                    "args": {"city": "London"}
+                                }
+                            }
+                        ]}
+                    ]
+                },
+                {
+                    "messages": [
+                        {"role": "get_weather", "chunks": [
+                            {
+                                "tool_response": {
+                                    "display_name": "get_weather",
+                                    "response": {"temp": 20}
+                                }
+                            }
+                        ]},
+                        {"role": "agent", "chunks": [
+                            {"text": "It is 20 degrees."}
+                        ]}
+                    ]
+                }
+            ]
+        }
+
+        mock_ch.get_conversation.return_value = MockProto(mock_conv_data)
+
+        results = [
+            {
+                "session_id": "session1",
+                "name": "Test Conv",
+                "expectation_details": [{"expectation": "Must say hi"}],
+                "session_parameters": {"key": "val"}
+            }
+        ]
+
+        # We need to mock Sessions._expand_pb_struct as it's called in the
+        # method
+        with patch(
+            'cxas_scrapi.core.sessions.Sessions._expand_pb_struct',
+            side_effect=lambda x: x
+        ):
+            yaml_output = self.sim_evals.export_results_to_golden(results)
+
+            # Basic checks on generated YAML
+            self.assertIn("user: hello", yaml_output)
+            self.assertIn("agent: hi there", yaml_output)
+            self.assertIn("user: how are you?", yaml_output)
+            self.assertIn("action: get_weather", yaml_output)
+            self.assertIn("city: London", yaml_output)
+            self.assertIn("output:", yaml_output)
+            self.assertIn("temp: 20", yaml_output)
+            self.assertIn("- It is 20 degrees.", yaml_output)
+            self.assertIn("Must say hi", yaml_output)
+            self.assertIn("key: val", yaml_output)
