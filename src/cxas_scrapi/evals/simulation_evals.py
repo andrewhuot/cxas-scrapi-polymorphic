@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import pydantic
 import yaml
-from tqdm import tqdm
+from rich.progress import Progress
 
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.conversation_history import ConversationHistory
@@ -720,36 +720,44 @@ class SimulationEvals(Apps):
     ) -> List[Dict[str, Any]]:
         """Aggregates results from multiple simulation jobs."""
         results = []
+        with Progress() as progress:
+            task_id = progress.add_task(
+                "Running Simulations", total=len(jobs)
+            )
 
-        if parallel <= 1:
-            for tc, run_idx in tqdm(jobs, desc="Running Simulations"):
-                results.append(
-                    self._run_single_simulation_job(
-                        tc, run_idx, runs, model, modality, verbose, parallel
+            if parallel <= 1:
+                for tc, run_idx in jobs:
+                    results.append(
+                        self._run_single_simulation_job(
+                            tc,
+                            run_idx,
+                            runs,
+                            model,
+                            modality,
+                            verbose,
+                            parallel,
+                        )
                     )
-                )
-        else:
-            max_workers = min(parallel, 25)
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(
-                        self._run_single_simulation_job,
-                        tc,
-                        run_idx,
-                        runs,
-                        model,
-                        modality,
-                        verbose,
-                        parallel,
-                    ): (tc["name"], run_idx)
-                    for tc, run_idx in jobs
-                }
-                for future in tqdm(
-                    as_completed(futures),
-                    total=len(futures),
-                    desc="Running Simulations",
-                ):
-                    results.append(future.result())
+                    progress.update(task_id, advance=1)
+            else:
+                max_workers = min(parallel, 25)
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(
+                            self._run_single_simulation_job,
+                            tc,
+                            run_idx,
+                            runs,
+                            model,
+                            modality,
+                            verbose,
+                            parallel,
+                        ): (tc["name"], run_idx)
+                        for tc, run_idx in jobs
+                    }
+                    for future in as_completed(futures):
+                        results.append(future.result())
+                        progress.update(task_id, advance=1)
 
         return results
 

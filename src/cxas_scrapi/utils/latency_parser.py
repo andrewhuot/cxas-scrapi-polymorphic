@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, List
 
 import pandas as pd
-from tqdm import tqdm
+from rich.progress import track
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +46,9 @@ class LatencyParser:
             f"latency metrics..."
         )
 
-        for i in tqdm(
+        for i in track(
             range(0, len(conv_list), chunk_size),
-            desc="Fetching Traces",
-            unit="batch",
+            description="Fetching Traces",
         ):
             chunk = conv_list[i : i + chunk_size]
             with ThreadPoolExecutor(max_workers=chunk_size) as executor:

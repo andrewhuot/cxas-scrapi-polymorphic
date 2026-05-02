@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import yaml
-from tqdm import tqdm
+from rich.progress import track
 from google.protobuf.json_format import MessageToDict
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
@@ -666,7 +666,7 @@ class TurnEvals:
             print(f"Error in dependency resolution: {e}")
             raise
 
-        for case in tqdm(sorted_cases, desc="Running Turn Tests"):
+        for case in track(sorted_cases, description="Running Turn Tests"):
             print(f"Running Turn Test: {case.name}")
 
             try:

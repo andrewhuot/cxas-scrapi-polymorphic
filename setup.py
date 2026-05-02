@@ -85,7 +85,6 @@ setup(
         "gspread-dataframe",
         "ipython",
         "PyYAML",
-        "tqdm",
         "google-genai",
         "pandas-gbq",
         "google-cloud-bigquery",

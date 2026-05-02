@@ -31,10 +31,13 @@ import time
 import yaml
 import json
 import os
-from tqdm import tqdm
 from datetime import datetime
 
 import pandas as pd
+from rich.console import Console
+from rich.progress import track
+
+console = Console()
 from cxas_scrapi.core.evaluations import Evaluations
 from cxas_scrapi.utils.eval_utils import EvalUtils
 from config import load_app_name, get_project_path
@@ -132,7 +135,7 @@ def cmd_push(args):
     yaml_evals = filter_evals(data, args.priority, getattr(args, 'tag', None))
     print(f"Pushing {len(yaml_evals)} evals to platform...")
 
-    for ev in tqdm(yaml_evals, desc="Pushing Evals"):
+    for ev in track(yaml_evals, description="Pushing Evals"):
         name = ev["name"]
 
         # Build scenario payload
@@ -175,7 +178,7 @@ def cmd_push(args):
             try:
                 client.delete_evaluation(platform[name], force=True)
             except Exception as e:
-                tqdm.write(f"  Warning: Failed to delete {name}: {e}")
+                console.print(f"  Warning: Failed to delete {name}: {e}")
 
         # Create new
         try:
@@ -185,7 +188,7 @@ def cmd_push(args):
             ev["last_run_score"] = None
             ev["last_run_id"] = None
         except Exception as e:
-            tqdm.write(f"  FAILED: {name}: {e}")
+            console.print(f"  FAILED: {name}: {e}")
 
     save_yaml(data)
     print(f"\nDone. YAML updated with new eval_ids.")
@@ -480,11 +483,11 @@ def cmd_push_goldens(args):
     total_created = 0
     total_updated = 0
 
-    for yf in tqdm(yaml_files, desc="Pushing Golden Files"):
+    for yf in track(yaml_files, description="Pushing Golden Files"):
         try:
             evals = utils.load_golden_evals_from_yaml(yf)
         except Exception as e:
-            tqdm.write(f"  Failed to parse {os.path.basename(yf)}: {e}")
+            console.print(f"  Failed to parse {os.path.basename(yf)}: {e}")
             continue
 
         for eval_dict in evals:
@@ -494,7 +497,7 @@ def cmd_push_goldens(args):
                 new_id = result.name.split("/")[-1]
                 total_created += 1
             except Exception as e:
-                tqdm.write(f"  FAILED: {name}: {e}")
+                console.print(f"  FAILED: {name}: {e}")
 
     print(f"\nDone. Synced {total_created} golden evals.")
 
