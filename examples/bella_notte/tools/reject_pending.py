@@ -11,7 +11,7 @@ def reject_pending() -> dict[str, Any]:
   Returns:
     Dict with discarded slot names and stored=True.
   """
-  sm = context.state['sm']  # pylint: disable=undefined-variable
+  sm = context.state['sm']  # noqa: F821  # pylint: disable=undefined-variable
   discarded = list(sm.get('pending', {}).keys())
   sm['pending'] = {}
   return {'discarded': discarded, 'stored': True}

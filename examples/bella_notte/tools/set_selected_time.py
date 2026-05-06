@@ -14,7 +14,7 @@ def set_selected_time(time: str) -> dict[str, Any]:
   Returns:
     Dict with stored=True and value on success, or error=True on failure.
   """
-  sm = context.state['sm']  # pylint: disable=undefined-variable
+  sm = context.state['sm']  # noqa: F821  # pylint: disable=undefined-variable
 
   if 'available_times' not in sm['filled']:
     sm.setdefault('_slot_errors', []).append(

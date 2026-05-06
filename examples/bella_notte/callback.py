@@ -13,7 +13,7 @@ tools within the same turn — `callback_context.state` always has the
 latest values.
 """
 
-import datetime
+import datetime  # noqa: I001
 from typing import Any
 
 
@@ -414,8 +414,8 @@ def before_model_callback(callback_context, llm_request):
   if (result.get("preempt")
       and llm_request.contents
       and len(llm_request.contents) > 1):
-    return LlmResponse.from_parts(  # pylint: disable=undefined-variable
-        parts=[Part.from_text(text=result["message"])])  # pylint: disable=undefined-variable
+    return LlmResponse.from_parts(  # noqa: F821  # pylint: disable=undefined-variable
+        parts=[Part.from_text(text=result["message"])])  # noqa: F821  # pylint: disable=undefined-variable
 
   return {"decision": "OK"}
 

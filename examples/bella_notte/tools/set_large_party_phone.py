@@ -15,7 +15,7 @@ def set_large_party_phone(phone: str) -> dict[str, Any]:
   Returns:
     Dict with stored=True and value on success, or error=True on failure.
   """
-  sm = context.state['sm']  # pylint: disable=undefined-variable
+  sm = context.state['sm']  # noqa: F821  # pylint: disable=undefined-variable
 
   phone = str(phone).strip()
   digits = re.sub(r'\D', '', phone)

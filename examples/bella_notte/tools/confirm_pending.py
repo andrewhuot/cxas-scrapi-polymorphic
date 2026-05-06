@@ -11,7 +11,7 @@ def confirm_pending() -> dict[str, Any]:
   Returns:
     Dict with committed slot names and stored=True, or error=True if empty.
   """
-  sm = context.state["sm"]  # pylint: disable=undefined-variable
+  sm = context.state["sm"]  # noqa: F821  # pylint: disable=undefined-variable
   pending = sm.get("pending", {})
   if not pending:
     return {"error": True}

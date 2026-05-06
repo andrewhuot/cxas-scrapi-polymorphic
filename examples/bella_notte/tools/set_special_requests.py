@@ -17,6 +17,6 @@ def set_special_requests(requests: str) -> dict[str, Any]:
     Dict with stored=True and value on success.
   """
   requests = str(requests).strip()
-  sm = context.state['sm']  # pylint: disable=undefined-variable
+  sm = context.state['sm']  # noqa: F821  # pylint: disable=undefined-variable
   sm.setdefault('pending', {})['special_requests'] = requests
   return {'stored': True, 'value': requests}

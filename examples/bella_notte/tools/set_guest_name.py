@@ -16,7 +16,7 @@ def set_guest_name(name: str) -> dict[str, Any]:
   Returns:
     Dict with stored=True and value on success, or error=True on failure.
   """
-  sm = context.state['sm']  # pylint: disable=undefined-variable
+  sm = context.state['sm']  # noqa: F821  # pylint: disable=undefined-variable
 
   name = str(name).strip()
   if not name:
