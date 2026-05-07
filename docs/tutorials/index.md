@@ -20,7 +20,7 @@ The current tutorial builds **Bella Notte** — a restaurant reservation agent f
 - Recovers gracefully from invalid input (party size out of range, past dates, unavailable times).
 - Has a full eval suite — 20+ golden evals and 5+ scenario evals — covering the happy path, error recovery, conversational detours, and multi-slot batching.
 
-The agent implements the [Slot Machine Pattern](../patterns/slot-filling.md) end-to-end. Reading that pattern page before starting the tutorial is recommended but not required.
+The agent implements the [Slot Filling Pattern](../patterns/slot-filling.md) end-to-end. Reading that pattern page before starting the tutorial is recommended but not required.
 
 ---
 
@@ -41,7 +41,7 @@ Work through the tutorial in order — each step builds on the previous one.
 | Step | What you'll do |
 |---|---|
 | 1 — Project setup | Create `gecx-config.json`, understand the folder structure |
-| 2 — Agent instruction | Write the XML-tagged instruction with the slot machine protocol |
+| 2 — Agent instruction | Write the XML-tagged instruction with the slot filling protocol |
 | 3 — Slot DAG | Define the 7 slots and 2 tasks |
 | 4 — Setter tools | Write `set_party_size.py` and the other setter tools |
 | 5 — The callback | Write `before_model_callback` with DAG evaluation and preemption |
@@ -57,7 +57,7 @@ Work through the tutorial in order — each step builds on the previous one.
 
 After completing the tutorial, you'll understand:
 
-- How the Slot Machine Pattern splits work between the LLM (language) and Python (state, control flow).
+- How the Slot Filling Pattern splits work between the LLM (language) and Python (state, control flow).
 - Why tool docstrings must be short and what happens when they're verbose.
 - How `before_model_callback` evaluates the DAG and preempts the LLM when a task fires.
 - How golden evals check exact tool calls and scenario evals check overall behavior.

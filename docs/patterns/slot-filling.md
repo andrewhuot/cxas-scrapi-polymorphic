@@ -1,11 +1,11 @@
 ---
-title: Slot Filling (Slot Machine Pattern)
+title: Slot Filling Pattern
 description: Build deterministic, production-ready slot-filling agents by keeping state in Python — not in the LLM's memory — and letting a DAG engine decide when to collect data and when to fire tasks.
 ---
 
-# Slot Filling — The Slot Machine Pattern
+# Slot Filling Pattern
 
-Collecting multiple structured inputs from a user in a conversational flow sounds simple. In practice, it's one of the hardest things to get right on CX Agent Studio. This page documents the **Slot Machine Pattern** — the approach developed from production experience with real agents — including the architecture, the three control surfaces that govern behavior, the critical callback preemption mechanism, and a full set of stabilization gotchas distilled from shipping.
+Collecting multiple structured inputs from a user in a conversational flow sounds simple. In practice, it's one of the hardest things to get right on CX Agent Studio. This page documents the **Slot Filling Pattern** — the approach developed from production experience with real agents — including the architecture, the three control surfaces that govern behavior, the critical callback preemption mechanism, and a full set of stabilization gotchas distilled from shipping.
 
 ---
 
@@ -33,7 +33,7 @@ Split the problem across two components:
 
 The LLM never decides "should I call the booking API now?" or "have I collected enough information?" — it calls setter tools as the user provides information, and follows `_system_message` to know what to ask next. Python handles everything else.
 
-This is the **Slot Machine Pattern** (sometimes called the slot filling DAG framework).
+This is the **Slot Filling Pattern** (sometimes called the slot filling DAG framework).
 
 ---
 
@@ -41,7 +41,7 @@ This is the **Slot Machine Pattern** (sometimes called the slot filling DAG fram
 
 <figure class="diagram">
   <!-- svg-source:excalidraw -->
-  <img src="../../assets/diagrams/slot-machine-flow.svg" alt="Slot Machine Data Flow">
+  <img src="../../assets/diagrams/slot-filling-flow.svg" alt="Slot Filling Data Flow">
   <figcaption>Data flows from the user through the LLM to setter tools, which write to <code>context.state</code>. The before_model_callback evaluates the DAG and either preempts the LLM or sets <code>_system_message</code> to guide the response.</figcaption>
 </figure>
 
@@ -69,7 +69,7 @@ User ──► LLM ──► Setter Tool ──► context.state['sm']
 
 ## The `sm` state variable
 
-All slot machine state lives in a single session-scoped dict named `sm`. You declare it as a `STRING` type variable in your app's `variableDeclarations`.
+All slot filling state lives in a single session-scoped dict named `sm`. You declare it as a `STRING` type variable in your app's `variableDeclarations`.
 
 ```json
 {
@@ -100,7 +100,7 @@ All slot machine state lives in a single session-scoped dict named `sm`. You dec
 
 ## The three control surfaces
 
-The Slot Machine Pattern has three places where you configure behavior. Getting all three right is the key to a stable agent.
+The Slot Filling Pattern has three places where you configure behavior. Getting all three right is the key to a stable agent.
 
 ### 1. Agent instruction (most critical)
 
@@ -109,8 +109,8 @@ The instruction tells the LLM its role in the pattern: call setter tools for eve
 The single most important detail is including a **concrete multi-slot example** in the batching rule. Abstract instructions alone ("call ALL setter tools") are insufficient — the LLM needs to see a specific example to generalize the batching behavior reliably.
 
 ```xml
-<slot_machine_protocol>
-You are operating in SLOT MACHINE mode. Follow these rules strictly:
+<slot_filling_protocol>
+You are operating in SLOT FILLING mode. Follow these rules strictly:
 
 1. TOOL-DRIVEN CONVERSATION: After each user message, identify EVERY piece
    of information the user provided and call ALL corresponding setter tools
@@ -132,7 +132,7 @@ You are operating in SLOT MACHINE mode. Follow these rules strictly:
 
 5. NATURAL CONVERSATION: If the user asks questions unrelated to the flow,
    answer helpfully but return to the reservation.
-</slot_machine_protocol>
+</slot_filling_protocol>
 
 <system_directive>
 {{system_message}}
@@ -437,7 +437,7 @@ User message
 
 === "Step 6 — Write the agent instruction"
 
-    Include the `<slot_machine_protocol>` block. Include a **concrete multi-slot example** in the batching rule. End with a `<system_directive>{{system_message}}</system_directive>` block so the LLM can see `_system_message`.
+    Include the `<slot_filling_protocol>` block. Include a **concrete multi-slot example** in the batching rule. End with a `<system_directive>{{system_message}}</system_directive>` block so the LLM can see `_system_message`.
 
 === "Step 7 — Write evaluations"
 
@@ -445,9 +445,9 @@ User message
 
 ---
 
-## Slot Machine vs. XML Taskflow
+## Slot Filling vs. XML Taskflow
 
-| Aspect | XML Taskflow | Slot Machine |
+| Aspect | XML Taskflow | Slot Filling |
 |---|---|---|
 | State tracking | LLM memory — degrades over long conversations | `context.state` — deterministic, persists across turns |
 | Task firing | LLM decides when (unreliable, premature or late) | Auto-fires when inputs ready — exact, every time |
@@ -566,9 +566,9 @@ These are the failure modes encountered shipping slot-filling agents to producti
 
 ## Mapping from Sonic YAML
 
-If you're migrating a Sonic-style agent definition to the Slot Machine Pattern:
+If you're migrating a Sonic-style agent definition to the Slot Filling Pattern:
 
-| Sonic YAML | Slot Machine equivalent |
+| Sonic YAML | Slot Filling equivalent |
 |---|---|
 | `type: Slot, source: user` | Setter tool + entry in `_next_question` order |
 | `type: Slot, source: task:X` | Task output written to `sm['filled']` in the callback |

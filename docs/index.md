@@ -104,7 +104,7 @@ CXAS SCRAPI is a high-level Python library and CLI that wraps the official `goog
 
     ---
 
-    Reusable architectural patterns for CXAS agents: the Slot Filling (Slot Machine) pattern, dynamic prompting, and self-healing error recovery.
+    Reusable architectural patterns for CXAS agents: the Slot Filling pattern, dynamic prompting, and self-healing error recovery.
 
     [Patterns →](patterns/index.md)
 
@@ -168,7 +168,7 @@ CXAS SCRAPI is a high-level Python library and CLI that wraps the official `goog
 
     ---
 
-    The Slot Machine pattern, dynamic prompting, self-healing errors, and more.
+    The Slot Filling pattern, dynamic prompting, self-healing errors, and more.
 
     [Patterns →](patterns/index.md)
 

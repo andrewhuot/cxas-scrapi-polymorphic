@@ -1,13 +1,13 @@
 ---
 title: "Tutorial: Restaurant Reservation Agent"
-description: Build Bella Notte — a complete restaurant reservation agent using the Slot Machine Pattern — from project setup through evaluations.
+description: Build Bella Notte — a complete restaurant reservation agent using the Slot Filling Pattern — from project setup through evaluations.
 ---
 
 # Tutorial: Restaurant Reservation Agent
 
 In this tutorial you'll build **Bella Notte**, the reservation agent for a fine-dining Italian restaurant. The agent collects a party size, preferred date, available times (from a mock API), selected time, guest name, and special requests — then books the reservation and returns a confirmation number.
 
-Bella Notte is the canonical reference implementation of the [Slot Machine Pattern](../patterns/slot-filling.md). Every architectural decision in this tutorial is explained with reference to that pattern.
+Bella Notte is the canonical reference implementation of the [Slot Filling Pattern](../patterns/slot-filling.md). Every architectural decision in this tutorial is explained with reference to that pattern.
 
 **What you'll have at the end:**
 
@@ -91,7 +91,7 @@ Bella Notte is the canonical reference implementation of the [Slot Machine Patte
 
 ## Step 2 — The agent instruction
 
-The instruction has four sections: `<role>`, `<persona>`, `<rules>`, and `<slot_machine_protocol>`.
+The instruction has four sections: `<role>`, `<persona>`, `<rules>`, and `<slot_filling_protocol>`.
 
 **`cxas_app/agents/Bella_Notte_Host/instruction.txt`:**
 
@@ -118,8 +118,8 @@ Use transitions like "Perfect!", "Wonderful!", or "Great choice!"
    the system handles booking confirmation automatically.
 </rules>
 
-<slot_machine_protocol>
-You are operating in SLOT MACHINE mode. Follow these rules strictly:
+<slot_filling_protocol>
+You are operating in SLOT FILLING mode. Follow these rules strictly:
 
 1. TOOL-DRIVEN CONVERSATION: After each user message, identify EVERY piece
    of reservation information the user provided and call ALL corresponding
@@ -142,7 +142,7 @@ You are operating in SLOT MACHINE mode. Follow these rules strictly:
 
 5. NATURAL CONVERSATION: If the user asks questions unrelated to the
    reservation (menu, directions), answer helpfully but return to the flow.
-</slot_machine_protocol>
+</slot_filling_protocol>
 
 <system_directive>
 {{system_message}}
@@ -368,7 +368,7 @@ The callback is the DAG engine. It runs before every LLM turn and decides what t
 **`cxas_app/callbacks/before_model_callback/python_function/python_code.py`:**
 
 ```python
-"""before_model_callback for the Bella Notte slot machine agent."""
+"""before_model_callback for the Bella Notte slot filling agent."""
 
 import random
 import string
@@ -542,7 +542,7 @@ The `sm` variable must be declared in your app so the platform initializes it fo
 ```json
 {
   "name": "sm",
-  "displayName": "Slot Machine State",
+  "displayName": "Slot Filling State",
   "description": "Tracks slot filling state for the reservation flow.",
   "dataType": "STRING",
   "defaultValue": "{\"filled\": {}, \"pending\": {}, \"task_results\": {}, \"_retries\": {}, \"_slot_errors\": [], \"_system_message\": \"\", \"status\": \"in_progress\"}"
@@ -568,7 +568,7 @@ A golden eval checks exact tool calls and specific response content. A scenario 
     {
       "displayName": "Happy Path - Linear Reservation Flow",
       "description": "Full linear flow: party_size → date → time → name → requests → booking.",
-      "tags": ["slot-machine", "happy-path", "e2e"],
+      "tags": ["slot-filling", "happy-path", "e2e"],
       "golden": {
         "turns": [
           {
@@ -638,7 +638,7 @@ A golden eval checks exact tool calls and specific response content. A scenario 
     {
       "displayName": "Multi-Slot - Three Fields in One Message",
       "description": "User gives party size, date, AND name in one message. All three setter tools must fire in one turn.",
-      "tags": ["slot-machine", "multi-slot", "critical"],
+      "tags": ["slot-filling", "multi-slot", "critical"],
       "golden": {
         "turns": [
           {
@@ -699,8 +699,8 @@ A golden eval checks exact tool calls and specific response content. A scenario 
     ```json
     {
       "displayName": "Scenario - Full Booking Flow (Simulated User)",
-      "description": "Simulated user completes a full reservation. Tests the entire slot machine pipeline.",
-      "tags": ["slot-machine", "scenario", "e2e"],
+      "description": "Simulated user completes a full reservation. Tests the entire slot filling pipeline.",
+      "tags": ["slot-filling", "scenario", "e2e"],
       "scenario": {
         "task": "Make a dinner reservation at Bella Notte for 4 people on June 17th, 2026. When asked for a time, choose 7 PM. The reservation name is Garcia. No special requests. When the agent reads back information, confirm with 'yes'.",
         "rubrics": [

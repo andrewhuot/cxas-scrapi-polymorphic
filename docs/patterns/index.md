@@ -15,7 +15,7 @@ Unlike guides — which walk you through SCRAPI's mechanics — patterns focus o
 
 | Pattern | Problem | When to use |
 |---|---|---|
-| [Slot Filling (Slot Machine)](slot-filling.md) | Collecting multiple structured inputs from a user in a natural conversation — without the LLM forgetting state or deciding on its own when to fire backend tasks. | Any agent that gathers information before taking an action: bookings, orders, registrations, claims, intake forms. |
+| [Slot Filling](slot-filling.md) | Collecting multiple structured inputs from a user in a natural conversation — without the LLM forgetting state or deciding on its own when to fire backend tasks. | Any agent that gathers information before taking an action: bookings, orders, registrations, claims, intake forms. |
 | [Dynamic Prompting](dynamic-prompting.md) | Adapting the agent's instruction mid-conversation based on what the user has done. | Agents with distinct phases (pre-auth vs. post-auth, intake vs. resolution) where the LLM's role meaningfully changes. |
 | [Self-Healing Errors](self-healing.md) | Giving the LLM exact recovery instructions when a tool call fails, instead of relying on the model to improvise. | Any agent with tool calls that can fail in predictable ways — API timeouts, validation errors, missing permissions. |
 
