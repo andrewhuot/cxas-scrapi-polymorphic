@@ -106,7 +106,7 @@ def _find_entry_function(content: str, expected_fn: str) -> re.Match | None:
 
 
 def _get_args(content: str, fn_name: str) -> list[str] | None:
-    """Return argument names of fn_name using AST, or None if not found/unparseable."""
+    """Return argument names of fn_name using AST, or None if not found."""
     try:
         tree = ast.parse(content)
     except SyntaxError:
