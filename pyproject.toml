@@ -1,3 +1,89 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cxas-scrapi"
+version = "1.1.0"
+description = "A high level scripting API for CX Agent Studio developers."
+readme = "README.md"
+authors = [
+  { name = "Patrick Marlow", email = "pmarlow@google.com" },
+]
+license = { text = "Apache-2.0" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Communications :: Chat",
+  "Topic :: Software Development",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+keywords = ["ces", "google", "bot", "chatbot", "agent", "scrapi"]
+requires-python = ">=3.10, <4"
+dependencies = [
+  "google-cloud-ces",
+  "google-auth",
+  "requests",
+  "protobuf",
+  "google-cloud-secret-manager",
+  "pydantic",
+  "jsonpath-ng",
+  "pandas",
+  "gspread",
+  "gspread-dataframe",
+  "ipython",
+  "PyYAML",
+  "google-genai",
+  "pandas-gbq",
+  "google-cloud-bigquery",
+  "pytest",
+  "google-cloud-texttospeech",
+  "websocket-client",
+  "certifi",
+  "json5",
+  "graphviz",
+  "rich",
+  "google-cloud-dialogflow-cx",
+  "google-cloud-storage",
+  "nest_asyncio",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest-asyncio",
+  "pytest-xdist",
+  "pytest-cov",
+  "ruff",
+  "twine",
+  "pre-commit",
+]
+docs = [
+  "mkdocs-material[imaging]>=9.5",
+  "mkdocstrings[python]>=0.27",
+  "mkdocs-git-revision-date-localized-plugin>=1.2",
+  "mkdocs-minify-plugin>=0.8",
+  "mike>=2.0",
+]
+
+[project.scripts]
+cxas = "cxas_scrapi.cli.main:main"
+
+[tool.hatch.build.targets.wheel.shared-data]
+".agents" = "share/cxas-scrapi/skills/.agents"
+".claude" = "share/cxas-scrapi/skills/.claude"
+".gemini" = "share/cxas-scrapi/skills/.gemini"
+"AGENTS.md" = "share/cxas-scrapi/skills/AGENTS.md"
+"GEMINI.md" = "share/cxas-scrapi/skills/GEMINI.md"
+"examples/cxaslint.yaml" = "share/cxas-scrapi/skills/examples/cxaslint.yaml"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cxas_scrapi"]
+
 [tool.ruff]
 line-length = 80
 target-version = "py310"
