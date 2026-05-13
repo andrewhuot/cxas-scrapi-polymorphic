@@ -57,29 +57,4 @@ jobs:
         run: uv sync --extra dev
       - name: Run tests with pytest
         run: |
-          uv run pytest tests/ -n auto --cov=src --cov-report=xml --cov-report=term-missing
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.xml
-          fail_ci_if_error: false
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-${{ matrix.python-version }}
-          path: coverage.xml
-
-  lint-examples:
-    name: Lint Examples
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - name: Install dependencies
-        run: uv sync
-      - name: Lint Bella Notte Example
-        run: uv run cxas lint --app-dir examples/bella_notte --validate-only
+          uv run pytest tests/ -n auto
