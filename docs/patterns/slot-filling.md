@@ -589,3 +589,14 @@ The Bella Notte restaurant reservation agent is the canonical reference implemen
 - 20+ golden evals, 5+ scenario evals
 
 [Build it yourself in the Restaurant Reservation Tutorial →](../tutorials/restaurant-reservation.md)
+
+---
+
+## Detailed guides
+
+For a hands-on, step-by-step walkthrough of building a slot-filling agent — from two simple slots to the full DAG with conditional logic, deferred readback, and error handling — see the **Slot Filling Guide**:
+
+- [Slot Filling Overview](../guides/slot-filling/index.md) — mental model, key concepts, and architecture
+- [Tutorial: Building an Agent](../guides/slot-filling/tutorial.md) — progressive tutorial using the Bella Notte example
+- [Advanced Patterns](../guides/slot-filling/advanced.md) — conditional slots, event pre-filling, announce slots, deferred readback
+- [Configuration Reference](../guides/slot-filling/reference.md) — complete field-by-field reference for `dag_config`
