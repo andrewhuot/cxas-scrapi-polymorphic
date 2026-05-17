@@ -221,9 +221,7 @@ class MigrationService:
         consolidate: bool = False,
         bundle: "IRBundle | None" = None,
         gemini_client: GeminiGenerate | None = None,
-        grouping_callback: (
-            Callable[[MigrationIR, dict], Awaitable[dict | None]] | None
-        ) = None,
+        grouping_callback: Callable[..., Awaitable[dict | None]] | None = None,
         grouping_json_path: str | None = None,
         on_integrity_fail: str = "abort",
         version_label: str | None = "0.0.1",
@@ -241,10 +239,16 @@ class MigrationService:
             gemini_client: Override the service's default Gemini client.
             grouping_callback: Async callable invoked after the consolidator
                 proposes groupings, before integrity check + consolidate +
-                deploy. Receives ``(ir, groupings)`` and returns the
-                accepted ``groupings`` dict (possibly edited) or ``None`` to
-                abort the consolidation step. The Stage 1 variable dedup
-                still applies regardless.
+                deploy. Called with kwargs ``ir``, ``groupings``,
+                ``consolidator``, ``root_key``, ``dep_summary`` so the
+                callback can preview consolidation via
+                ``consolidator.consolidate(...)`` and re-propose via
+                ``consolidator.propose_groupings(...)``. Returns the
+                accepted ``groupings`` dict (possibly edited) or ``None``
+                to abort the consolidation step. The Stage 1 variable
+                dedup still applies regardless. See
+                :func:`cxas_scrapi.cli.grouping_review.interactive_review`
+                for the canonical TUI implementation.
             grouping_json_path: If set, load groupings from this JSON file
                 instead of calling Gemini.
             on_integrity_fail: How to handle ``check_consolidation_integrity``
@@ -355,9 +359,17 @@ class MigrationService:
                 root_key=root_key, dep_summary=dep_summary
             )
 
-        # 3. Optional interactive review.
+        # 3. Optional interactive review. The callback receives everything
+        # it needs to preview consolidation + re-propose, all via kwargs so
+        # it can pick out whichever args it actually uses.
         if grouping_callback is not None:
-            reviewed = await grouping_callback(self.ir, groupings)
+            reviewed = await grouping_callback(
+                ir=self.ir,
+                groupings=groupings,
+                consolidator=consolidator,
+                root_key=root_key,
+                dep_summary=dep_summary,
+            )
             if reviewed is None:
                 logger.warning(
                     "Grouping review aborted — Stage 1 dedup applied, "

@@ -428,7 +428,10 @@ async def test_run_stage1_callback_returning_none_skips_consolidation():
         return_value={"G": {"agents": ["Root Agent"], "is_root": True}}
     )
 
-    async def reject_callback(ir, groupings):
+    # Callback receives kwargs (ir, groupings, consolidator, root_key,
+    # dep_summary) — accept **_ so the test doesn't have to mirror the
+    # full contract.
+    async def reject_callback(**_):
         return None
 
     with (
