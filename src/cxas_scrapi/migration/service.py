@@ -409,6 +409,21 @@ class MigrationService:
             error_count,
         )
 
+        # 7b. Heal trivial tool-ref drift before integrity check.
+        # The 2B prompt now receives the full tool registry, but Gemini
+        # still occasionally over-applies the ``_wrapper`` / ``_tool``
+        # suffix pattern. This pass strips a suffix when the base ID
+        # exists and the suffixed form doesn't — strictly safe
+        # rewrites. Genuine hallucinations (refs with no near match)
+        # are left for integrity_checks to surface.
+        rewrites, unhealed = structural_consolidator.heal_tool_refs(self.ir)
+        if rewrites:
+            logger.info(
+                "Healed %d tool-ref mismatches (e.g. %s)",
+                len(rewrites),
+                ", ".join(f"{k}→{v}" for k, v in list(rewrites.items())[:3]),
+            )
+
         # 8. Pre-deploy integrity check.
         blocking, warnings = integrity_checks.check_consolidation_integrity(
             self.ir, pre_consolidation_ir
