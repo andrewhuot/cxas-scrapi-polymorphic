@@ -248,7 +248,7 @@ class AppRootAgentValidation(Rule):
                 self.make_result(
                     file=rel,
                     message=(
-                        "Found 'root_agent' in app.json, but GECX strictly "
+                        "Found 'root_agent' in app.json, but CXAS strictly "
                         "requires camelCase 'rootAgent'"
                     ),
                     fix="Rename 'root_agent' to 'rootAgent'",
