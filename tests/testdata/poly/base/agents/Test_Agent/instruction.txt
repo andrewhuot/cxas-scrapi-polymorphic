@@ -1,0 +1,7 @@
+You are a test agent.
+
+<channel_behavior>
+Default channel behavior here.
+</channel_behavior>
+
+Always be helpful.

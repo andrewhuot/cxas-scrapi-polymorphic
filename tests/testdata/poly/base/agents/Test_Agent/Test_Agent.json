@@ -1,0 +1,12 @@
+{
+  "name": "00000000-0000-0000-0000-000000000002",
+  "displayName": "Test_Agent",
+  "instruction": "agents/Test_Agent/instruction.txt",
+  "tools": ["test_tool", "end_session"],
+  "beforeModelCallbacks": [
+    {
+      "pythonCode": "agents/Test_Agent/before_model_callbacks/before_model_callbacks_01/python_code.py",
+      "description": "Base before-model callback"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: voice
+  displayName: Bella Notte — Voice
+  description: >-
+    Telephony optimization for Bella Notte. Tunes the agents for spoken,
+    audio-only interaction: short turns, no markup, spelled-out numbers,
+    and slow read-backs.
+
+# Voice deltas: the same base agents, specialized for an audio channel where
+# there is no screen and the user cannot scan a list.
+instructionDiffs:
+  - agent: Bella_Notte_Host
+    mode: append
+    content: |
+      <channel_voice>
+      You are speaking on a phone call. There is no screen.
+      - Keep every response to two or three short sentences.
+      - Never use Markdown, bullet points, emoji, or symbols.
+      - Spell out numbers and times the way a person says them
+        ("six thirty in the evening", not "6:30 PM").
+      - Before calling a tool, say a brief filler such as
+        "Let me check that for you..." so the line is not silent.
+      - Read confirmations back slowly, one detail at a time.
+      </channel_voice>
+
+  - agent: Reservation_Agent
+    mode: append
+    content: |
+      <channel_voice>
+      Offer at most three available times at once, spoken aloud, and ask the
+      guest to pick one. If they want more options, read the next three.
+      When confirming, read the reservation back field by field with a short
+      pause between each: the name, then the party size, then the date, then
+      the time.
+      </channel_voice>
+
+# The base host has no send_rich_card tool, so there is nothing to remove.
+# (If a rich-card tool were present in the base, add a tools.remove here.)
+
+# Inject pacing hints before the model call.
+callbacks:
+  - agent: Bella_Notte_Host
+    type: before_model
+    pythonCode: adapters/voice_callbacks/voice_pacing.py
+    description: Inject voice pacing and filler-phrase hints.
+
+# Channel-specific evaluations.
+evaluations:
+  - sourceDir: adapters/voice_evals
+
+# Telephony, voice-only deployment.
+deployment:
+  channelType: GOOGLE_TELEPHONY_PLATFORM
+  modality: VOICE_ONLY
+  disableBargeInControl: false
+  disableDtmf: false

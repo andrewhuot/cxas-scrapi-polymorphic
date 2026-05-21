@@ -1,0 +1,64 @@
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: chat
+  displayName: Bella Notte — Chat
+  description: >-
+    Web chat optimization for Bella Notte. Enables rich, markdown-formatted
+    responses, selectable option lists, and rich confirmation cards.
+
+# Layer chat-specific behavior on top of the base instructions. The base
+# stays channel-neutral; these deltas specialize it for a visual surface.
+instructionDiffs:
+  - agent: Bella_Notte_Host
+    mode: append
+    content: |
+      <channel_chat>
+      You are responding in a web chat widget that renders Markdown.
+      - Use **bold** for emphasis and short numbered lists for options.
+      - When confirming a reservation or order, call the send_rich_card tool
+        to render a structured confirmation card instead of plain text.
+      - Keep paragraphs short; prefer bullets over long prose.
+      </channel_chat>
+
+  - agent: Reservation_Agent
+    mode: append
+    content: |
+      <channel_chat>
+      Present available time slots as a numbered, selectable list, e.g.:
+        1. 6:00 PM
+        2. 6:30 PM
+        3. 7:00 PM
+      Let the guest reply with the number or the time. Echo the chosen slot
+      back in **bold** before booking.
+      </channel_chat>
+
+# Make the rich-card tool available to the host, and define it.
+tools:
+  - agent: Bella_Notte_Host
+    add:
+      - send_rich_card
+
+toolDefinitions:
+  - displayName: send_rich_card
+    toolType: python
+    sourceDir: adapters/chat_tools/send_rich_card
+
+# Inject rich-content hints before the model call when a confirmation is due.
+callbacks:
+  - agent: Bella_Notte_Host
+    type: before_model
+    pythonCode: adapters/chat_callbacks/inject_rich_content.py
+    description: Inject rich card formatting hints for chat confirmations.
+
+# Channel-specific evaluations.
+evaluations:
+  - sourceDir: adapters/chat_evals
+
+# Web UI, chat-only deployment.
+deployment:
+  channelType: WEB_UI
+  modality: CHAT_ONLY
+  webWidgetConfig:
+    theme: LIGHT
+    webWidgetTitle: Bella Notte Reservations

@@ -1,0 +1,30 @@
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: voice
+  displayName: Test Voice Adapter
+  description: Voice adapter for the poly engine test fixture.
+
+instructionDiffs:
+  - agent: Test_Agent
+    mode: replace_section
+    sectionTag: channel_behavior
+    content: |
+      Voice channel: keep responses short, no markdown, spell out numbers.
+
+tools:
+  - agent: Test_Agent
+    remove:
+      - test_tool
+
+callbacks:
+  - agent: Test_Agent
+    type: before_model
+    pythonCode: adapters/voice_callbacks/voice_pacing.py
+    description: Voice pacing hints.
+
+deployment:
+  channelType: GOOGLE_TELEPHONY_PLATFORM
+  modality: VOICE_ONLY
+  disableDtmf: false
+  disableBargeInControl: false

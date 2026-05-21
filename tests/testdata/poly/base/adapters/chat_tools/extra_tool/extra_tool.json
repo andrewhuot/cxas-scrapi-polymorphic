@@ -1,0 +1,9 @@
+{
+  "name": "00000000-0000-0000-0000-000000000004",
+  "displayName": "extra_tool",
+  "pythonFunction": {
+    "name": "extra_tool",
+    "pythonCode": "tools/extra_tool/python_function/python_code.py",
+    "description": "A chat-only extra tool."
+  }
+}

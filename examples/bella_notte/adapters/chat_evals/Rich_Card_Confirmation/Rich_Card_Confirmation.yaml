@@ -1,0 +1,20 @@
+displayName: Rich Card Confirmation
+description: >-
+  Chat channel — when the guest confirms a completed reservation, the agent
+  should render a confirmation via the send_rich_card tool rather than plain
+  text.
+tags:
+  - polymorphism
+  - chat
+  - rich-card
+golden:
+  turns:
+    - steps:
+        - userInput:
+            text: "Yes, that all looks correct — please book it."
+        - expectation:
+            note: Check_SendRichCard_Called
+            toolCall:
+              tool: send_rich_card
+  evaluationExpectations:
+    - No Technical Leakage
