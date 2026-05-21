@@ -1,6 +1,4 @@
-# CX Agent Studio Scripting API (CXAS SCRAPI)
-
-
+# Polymorphism Proof of Concept with SCRAPI
 
 <html>
     <h2 align="center">
