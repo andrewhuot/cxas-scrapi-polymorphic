@@ -6,202 +6,482 @@
 
 <html>
     <h2 align="center">
-      <!-- Replace with actual image path once uploaded -->
       <img src="assets/cxas-scrapi-logo.png" width="256" alt="CXAS SCRAPI Logo"/>
     </h2>
     <h3 align="center">
-      A powerful Python API, CLI, and set of Agent Skills for CX Agent Studio to automate, evaluate, and scale your agents with ease.
+      Author one agent at the center. Compile channel-optimized variants at the edges.
     </h3>
     <h3 align="center">
       Important Links:
       <a href="https://googlecloudplatform.github.io/cxas-scrapi/stable/">Docs</a>,
       <a href="examples/">Examples</a>,
-      <a href="https://googlecloudplatform.github.io/cxas-scrapi/stable/guides/skills/">Agent Skills</a>,
-      <a href="https://googlecloudplatform.github.io/cxas-scrapi/stable/api/">Core SDK</a>
+      <a href="docs/guides/polymorphism.md">Polymorphism Guide</a>,
+      <a href="docs/cli/poly.md"><code>cxas poly</code> CLI</a>
     </h3>
 </html>
 
-CX Agent Studio Scripting API (CXAS SCRAPI) is an open-source Python scripting
-API, CLI, and set of Agent Skills for CX Agent Studio. It is designed to
-simplify building, deploying, and orchestrating agent workflows, from simple
-tasks to complex systems. It integrates seamlessly with Agentic IDEs like
-Gemini CLI, Claude Code, and Antigravity, exposing advanced tooling for deep
-evaluations, real-time latency metrics, offline linting, and conversation
-history.
+CXAS SCRAPI is a Python API, CLI, and set of Agent Skills for CX Agent Studio.
+This README focuses on its **architecture** and on the feature this repository is
+built around: **polymorphism** — authoring an agent project once and compiling a
+complete, channel-optimized project (chat, voice, …) for each target.
+
+> New to the project's auth, install, and core SDK? See the
+> [official docs](https://googlecloudplatform.github.io/cxas-scrapi/stable/).
+> This document assumes you just want to understand how the pieces fit together
+> and how to use polymorphism.
 
 ---
 
-## Built With
-* Python 3.10+
+## Table of contents
 
-
-<!-- AUTHENTICATION -->
-# Authentication
-Authentication can vary depending on how and where you are interacting with SCRAPI.
-
-## Google Colab
-If you're using CXAS SCRAPI with a [Google Colab](https://colab.research.google.com/) notebook, you can add the following to the top of your notebook for easy authentication:
-
-```py
-pip install cxas-scrapi
-```
-
-```py
-project_id = '<YOUR_GCP_PROJECT_ID>'
-
-# this will launch an interactive prompt that allows you to auth with GCP in a browser
-!gcloud auth application-default login --no-launch-browser
-
-# this will set your active project to the `project_id` above
-!gcloud auth application-default set-quota-project $project_id
-```
-
-After running the above, Colab will pick up your credentials from the environment and pass them to CXAS SCRAPI directly. No need to use Service Account keys!
-You can then use CXAS SCRAPI simply like this:
-```py
-from cxas_scrapi import Apps
-
-project_id = '<YOUR_GCP_PROJECT_ID>'
-location = 'us'
-
-app_client = Apps(project_id=project_id, location=location) # <-- Creds will be automatically picked up from the environment
-apps_map = app_client.get_apps_map()
-```
----
-## Cloud Functions / Cloud Run
-If you're using CXAS SCRAPI with [Cloud Functions](https://cloud.google.com/functions) or [Cloud Run](https://cloud.google.com/run), CXAS SCRAPI can pick up on the default environment creds used by these services without any additional configuration!
-
-1. Add `cxas-scrapi` to your `requirements.txt` file
-2. Ensure the Cloud Function / Cloud Run service account has the appropriate Custom Agent / Conversational Agents IAM Role
-
-Once you are setup with the above, your function code can be used easily like this:
-```py
-from cxas_scrapi import Agents
-
-app_name = '<YOUR_APP_NAME>'
-a = Agents(project_id='<YOUR_GCP_PROJECT_ID>', location='global')
-agents_map = a.get_agents_map(app_name)
-```
+1. [The core idea](#the-core-idea)
+2. [Architecture at a glance](#architecture-at-a-glance)
+3. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
+4. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
+5. [Adapter card reference](#adapter-card-reference)
+6. [The compilation pipeline](#the-compilation-pipeline)
+7. [Driving the engine from Python](#driving-the-engine-from-python)
+8. [Validation rules](#validation-rules)
+9. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
+10. [Where to go next](#where-to-go-next)
 
 ---
-## Local Python Environment
-Similar to Cloud Functions / Cloud Run, CXAS SCRAPI can pick up on your local authentication creds _if you are using the gcloud CLI._
 
-1. Install [gcloud CLI](https://cloud.google.com/sdk/docs/install).
-2. Run `gcloud init`.
-3. Run `gcloud auth login`
-4. Run `gcloud auth application-default login`
-5. Run `gcloud auth list` to ensure your principal account is active.
+## The core idea
 
-This will authenticate your principal GCP account with the gcloud CLI, and SCRAPI can pick up the creds from here.
+A reservation agent that works beautifully in a web chat widget rarely works
+well on a phone call. Chat wants Markdown, numbered lists, and rich confirmation
+cards. Voice wants two-sentence turns, spelled-out numbers, and filler phrases so
+the line is never silent. The behavior is *mostly* the same — same tools, same
+flow, same business rules — but the surface differs.
+
+The naive answer is to **fork**: maintain `bella_notte_chat/` and
+`bella_notte_voice/` as two full projects. They immediately drift. A bug fixed in
+one isn't fixed in the other; a tool added to one is forgotten in the other.
+
+**Polymorphism** is the alternative:
+
+> **Author the agent once at the center, describe the per-channel _deltas_
+> declaratively, and _compile_ a complete, channel-optimized project for each
+> target.**
+
+The polymorphism happens entirely at **build time**. There is no special
+"polymorphic runtime" — what you deploy is an ordinary SCRAPI project.
+
+```
+              base project                      cxas poly build           one project per channel
+  ┌───────────────────────────────┐                                  ┌──────────────────────────┐
+  │ app.json · agents/ · tools/    │                                  │ output/chat/   (Markdown, │
+  │ evaluations/ (channel-neutral) │  ──────────────────────────►    │   rich cards, WEB_UI)     │
+  │                                │        compile + validate        ├──────────────────────────┤
+  │ adapters/                      │                                  │ output/voice/  (terse,    │
+  │   chat.adapter.yaml   (deltas) │                                  │   spoken, TELEPHONY)      │
+  │   voice.adapter.yaml  (deltas) │                                  └──────────────────────────┘
+  └───────────────────────────────┘
+```
+
+### The three primitives
+
+| Primitive | What it is | Where it lives |
+|---|---|---|
+| **Canonical Agent Card** | Your ordinary, channel-neutral agent project — `app.json`, `agents/`, `tools/`, `evaluations/`. Nothing new to learn. | The project root |
+| **Channel Adapter Card** | A small YAML/JSON file describing what changes for one channel: instruction edits, tool add/remove, model overrides, extra callbacks, channel evals, and deployment settings. | `adapters/<channel>.adapter.yaml` |
+| **Polymorphism Engine** | The compiler. Reads the base project + adapter cards and writes one complete project directory per channel. | `cxas poly` / `cxas_scrapi.poly` |
 
 ---
-## Exceptions and Misc.
-If you prefer to explicitly assign Service Account credentials programmatically instead of relying on the environmental `application-default`, you can pass the path to your JSON key using `creds_path`.
 
-```py
-from cxas_scrapi import Tools
+## Architecture at a glance
 
-creds_path = '<PATH_TO_YOUR_SERVICE_ACCOUNT_JSON_FILE>'
+The library is organized by responsibility. Each top-level package under
+`src/cxas_scrapi/` owns one concern:
 
-t = Tools(project_id='<YOUR_GCP_PROJECT_ID>', location='global', creds_path=creds_path)
-tools_map = t.get_tools_map('<YOUR_APP_NAME>')
+| Package | Responsibility |
+|---|---|
+| [`core/`](src/cxas_scrapi/core) | High-level building blocks mapped to CXAS resource types — `Apps`, `Agents`, `Tools`, `Guardrails`, `Deployments`, `Sessions`, etc. The main public SDK surface. |
+| [`poly/`](src/cxas_scrapi/poly) | **The polymorphism engine** — adapter-card models, validators, and the compiler. Pure local file I/O; intentionally **GCP-free** (no `google.cloud.*` imports, no network). |
+| [`cli/`](src/cxas_scrapi/cli) | The `cxas` command line. `cli/poly_cli.py` wires up `cxas poly build / validate / diff`. |
+| [`evals/`](src/cxas_scrapi/evals) | Executing and analyzing agent evaluations — goldens, simulations, latency. |
+| [`utils/`](src/cxas_scrapi/utils) | Pagination, proto/response flattening, linting, Sheets/GCS integrations. |
+| [`migration/`](src/cxas_scrapi/migration) | Tools for migrating legacy Dialogflow CX agents into CXAS. |
+
+The dependency arrow points one way: **`poly/` depends on nothing in the rest of
+the SDK** (and pulls in no GCP libraries), so the compiler runs anywhere — CI, a
+laptop, a sandbox — without credentials. The CLI and the rest of the SDK depend
+on `poly/`, never the reverse.
+
+```
+cli/poly_cli.py ──► poly/engine.py ──► poly/models.py
+                          │                  ▲
+                          └──► poly/validators.py
+                          (no google.cloud.*, no network)
 ```
 
-<!-- GETTING STARTED -->
-# Getting Started
-## Environment Setup
-Set up Google Cloud Platform credentials and install dependencies.
-```sh
-gcloud auth login
-gcloud auth application-default login
-gcloud config set project <project name>
+---
+
+## Inside the polymorphism engine
+
+The `poly/` package is three small files. Reading them top to bottom is the
+fastest way to understand the whole feature:
+
+### `poly/models.py` — the schema
+
+Pydantic models that define the **shape of an adapter card**. The top-level
+[`AdapterCard`](src/cxas_scrapi/poly/models.py) holds:
+
+- `metadata` ([`AdapterMetadata`](src/cxas_scrapi/poly/models.py)) — `channel`,
+  `displayName`, `description`.
+- `instruction_diffs` (`List[InstructionDiff]`) — edits to instruction text.
+- `tools` (`List[ToolModification]`) — add/remove tools on an agent.
+- `tool_definitions` (`List[ToolDefinition]`) — bring channel-only tools in.
+- `model_overrides` (`List[ModelOverride]`) — per-agent model swap.
+- `callbacks` (`List[CallbackDefinition]`) — channel-specific callbacks.
+- `evaluations` (`List[EvalReference]`) — extra eval directories to merge.
+- `deployment` (`Optional[DeploymentOverride]`) — channel/modality/widget config.
+
+Every model uses `populate_by_name=True`, so cards can be written in friendly
+**camelCase** (`displayName`, `sectionTag`, `pythonCode`) while the Python code
+reads them as snake_case. The result of a compile is a
+[`CompiledAgentConfig`](src/cxas_scrapi/poly/models.py): a pure-data snapshot of
+everything the engine will write to disk, so callers can introspect or transform
+it before anything touches the filesystem.
+
+### `poly/validators.py` — the safety net
+
+Pure, local checks (`AD001`–`AD007`) that run **before** compilation. Each
+returns a list of issue dicts shaped exactly like the linter's results
+(`{rule_id, severity, message, path}`), and the same checks back the `adapters`
+category of `cxas lint`. See [Validation rules](#validation-rules).
+
+### `poly/engine.py` — the compiler
+
+[`PolymorphismEngine`](src/cxas_scrapi/poly/engine.py) does the work in three
+phases:
+
+1. **Load** — `load_base_project()` reads `app.json`, every agent (config +
+   instruction + callback code), and every tool into memory as
+   `BaseProject`. `load_adapter_cards()` globs `adapters/*.adapter.{yaml,yml,json}`.
+2. **Compile** — `compile(card)` deep-copies the base and applies the card's
+   deltas in a fixed order (see [pipeline](#the-compilation-pipeline)), returning
+   a `CompiledAgentConfig`. `compile_all()` validates and compiles every card.
+3. **Write** — `write_output(compiled, dir)` materializes one complete project
+   directory: untouched base files are copied verbatim; agents, `app.json`, and
+   `gecx-config.json` are reconstructed; channel-only tools/evals/deployment are
+   added.
+
+---
+
+## Using polymorphism, step by step
+
+The repository ships a complete, runnable example — the **Bella Notte**
+restaurant agent — under [`examples/bella_notte/`](examples/bella_notte). All
+commands below operate on it.
+
+### 1. Start from an ordinary project
+
+The base project is a normal SCRAPI project — nothing about it is
+polymorphism-specific. The only addition is an `adapters/` directory:
+
 ```
-```sh
-uv sync
-source .venv/bin/activate
+examples/bella_notte/
+├── app.json
+├── gecx-config.json
+├── agents/
+│   ├── Bella_Notte_Host/        # root agent: routes reservation vs. takeout
+│   ├── Reservation_Agent/       # slot-filling specialist
+│   └── Takeout_Agent/
+├── tools/                       # set_active_flow, book_reservation, …
+├── evaluations/                 # shared, channel-neutral goldens
+└── adapters/                    # ← the per-channel deltas live here
+    ├── chat.adapter.yaml
+    └── voice.adapter.yaml
 ```
 
-## Usage
-To run a simple bit of code you can do the following:
-- Import a Class from `cxas_scrapi`
-- Define your GCP Project and Location
+Write the base instructions to be **channel-neutral**: describe *what* the agent
+does, not *how* it should look on a screen or sound on a call.
+
+### 2. Write a channel adapter card
+
+An adapter card is a short declaration of deltas. Here is the voice adapter,
+annotated:
+
+```yaml
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: voice                       # the channel name (becomes output/voice/)
+  displayName: Bella Notte — Voice
+
+# Layer voice behavior on top of the base instructions.
+instructionDiffs:
+  - agent: Bella_Notte_Host
+    mode: append                       # append | prepend | replace_section
+    content: |
+      <channel_voice>
+      You are speaking on a phone call. There is no screen.
+      - Keep every response to two or three short sentences.
+      - Spell out numbers and times ("six thirty in the evening").
+      </channel_voice>
+
+# Inject pacing hints right before the model call.
+callbacks:
+  - agent: Bella_Notte_Host
+    type: before_model
+    pythonCode: adapters/voice_callbacks/voice_pacing.py
+    description: Inject voice pacing and filler-phrase hints.
+
+# Fold channel-specific evaluations into the compiled evaluations/.
+evaluations:
+  - sourceDir: adapters/voice_evals
+
+# Emit a deployment.json for telephony, voice-only.
+deployment:
+  channelType: GOOGLE_TELEPHONY_PLATFORM
+  modality: VOICE_ONLY
+```
+
+The chat adapter pulls the *same* base in the opposite direction — Markdown,
+numbered lists, and an extra `send_rich_card` tool. See
+[`chat.adapter.yaml`](examples/bella_notte/adapters/chat.adapter.yaml) for the
+full version, which also demonstrates `tools` + `toolDefinitions`.
+
+### 3. Validate before you build
+
+```bash
+cxas poly validate --app-dir examples/bella_notte
+```
+
+```
+All 2 adapter card(s) valid.
+```
+
+Validation checks that every referenced agent/tool/section actually exists, that
+no two cards claim the same channel, and more — see
+[Validation rules](#validation-rules).
+
+### 4. Preview the changes with `diff`
+
+`diff` shows exactly what an adapter will change, **without writing anything**:
+
+```bash
+cxas poly diff chat --app-dir examples/bella_notte
+```
+
+```
+Channel: chat   (adapter: adapters/chat.adapter.yaml)
+
+agents/Bella_Notte_Host
+  instruction: + 7 line(s) append
+    + <channel_chat>
+    + You are responding in a web chat widget that renders Markdown.
+    + - Use **bold** for emphasis and short numbered lists for options.
+    + ...
+  tools (2 -> 3):
+    + send_rich_card
+  callbacks: + before_model (Inject rich card formatting hints for chat confirmations.)
+agents/Reservation_Agent
+  instruction: + 8 line(s) append
+    + <channel_chat>
+    + Present available time slots as a numbered, selectable list, e.g.:
+    +   1. 6:00 PM
+    + ...
+
+tools/
+  + send_rich_card
+
+evaluations/
+  + 1 eval(s): Rich_Card_Confirmation
+
+deployment.json
+  + channelType: WEB_UI
+  + modality: CHAT_ONLY
+  + theme: LIGHT
+  + webWidgetTitle: Bella Notte Reservations
+```
+
+### 5. Build the channels
+
+```bash
+cxas poly build --app-dir examples/bella_notte --output-dir ./output
+```
+
+```
+Compiled channel 'chat' -> ./output/chat
+Compiled channel 'voice' -> ./output/voice
+
+Done. 2 channel(s) written to ./output
+```
+
+### 6. Lint, evaluate, and deploy — the output is "just a project"
+
+The single most important property of the engine: **the compiled output is
+indistinguishable from a hand-authored project.** Every existing command works on
+it with zero changes:
+
+```bash
+cxas lint --app-dir ./output/chat     # ✓ passes
+cxas lint --app-dir ./output/voice    # ✓ passes
+# run evals, deploy, etc. on ./output/<channel> exactly as usual
+```
+
+There is no half-compiled state and no special runtime to install. That is the
+payoff of *author once at the center*: you maintain a single agent, and the
+channel-specific surfaces fall out of two short adapter files.
+
+---
+
+## Adapter card reference
+
+An adapter card declares deltas in seven optional sections. Each is applied to
+the deep-copied base during compilation.
+
+| Section | Field | What it does |
+|---|---|---|
+| **Instruction diffs** | `instructionDiffs[]` | Edit an agent's instruction text. `mode: append` / `prepend` add text; `mode: replace_section` swaps the contents of an XML-style `<sectionTag>…</sectionTag>` block. |
+| **Tool modifications** | `tools[]` | `add`/`remove` tool names on a named agent's `tools` list. |
+| **Tool definitions** | `toolDefinitions[]` | Bring a channel-only tool into `tools/` from a `sourceDir` (its `<name>.json` + `python_code.py`). Required when a `tools.add` references a tool not in the base. |
+| **Model overrides** | `modelOverrides[]` | Set `modelSettings.model` for an agent in this channel. |
+| **Callbacks** | `callbacks[]` | Append a channel-specific callback (`before_model`, `after_model`, `before_tool`, `after_tool`, `before_agent`, `after_agent`). Auto-numbered after any existing ones. |
+| **Evaluations** | `evaluations[]` | Merge a `sourceDir` of channel-specific evaluations into `evaluations/`. |
+| **Deployment** | `deployment` | Emit a `deployment.json` (channel type, modality, web-widget config) and update `gecx-config.json`. |
+
+Two conveniences worth knowing:
+
+- **Agents may be referenced by display name or directory name** — the engine
+  resolves either form.
+- **`replace_section` is surgical.** It only replaces the matched `<tag>…</tag>`
+  block, so the rest of the instruction stays byte-for-byte intact. If most of
+  your sections need `replace_section`, that's a signal the channels may want to
+  be [separate agents](#when-to-use-adapters-vs-separate-agents).
+
+---
+
+## The compilation pipeline
+
+`PolymorphismEngine.compile()` applies an adapter in a fixed, deterministic
+order. Understanding the order explains the output:
+
+1. **Deep-copy the base.** Agent configs, instructions, and existing callback
+   code are copied so the base is never mutated.
+2. **Instruction diffs.** `append` / `prepend` / `replace_section` on each named
+   agent.
+3. **Tool add / remove.** Update each agent's `tools` list (adds are
+   de-duplicated; removes are filtered out).
+4. **Tool definitions.** Read each channel-only tool's directory; normalize its
+   code path to the canonical `tools/<name>/python_function/python_code.py`.
+5. **Model overrides.** Set `modelSettings.model` per agent.
+6. **Callbacks.** Append channel callbacks, auto-numbering after existing ones
+   (e.g. a second `before_model` callback becomes `before_model_callbacks_02`).
+7. **Evaluations.** Merge each channel eval directory.
+8. **Deployment + gecx config.** Build `deployment.json`; set `default_channel`,
+   `app_dir`, and (for voice) `modality` in `gecx-config.json`.
+
+Errors are **accumulated, not fail-fast**: a missing agent or section is recorded
+as an issue and compilation continues, so a single run surfaces *every* problem
+at once via a `CompilationError` carrying the full issue list.
+
+---
+
+## Driving the engine from Python
+
+Everything the CLI does is available programmatically. The engine is GCP-free, so
+this snippet runs anywhere:
 
 ```python
-from cxas_scrapi import Apps
+from cxas_scrapi.poly import PolymorphismEngine, CompilationError
 
-# Instantiate your class object and pass in your credentials
-app_client = Apps(project_id='<YOUR_GCP_PROJECT_ID>', location='global')
+engine = PolymorphismEngine("examples/bella_notte")
+engine.load_base_project()
+engine.load_adapter_cards()          # populates engine.adapters {channel: (card, path)}
 
-# Retrieve all Apps existing in your project
-apps = app_client.list_apps()
-for app in apps:
-    print(app.display_name, app.name)
+try:
+    # Compile and write every channel.
+    compiled = engine.compile_all()  # {channel: CompiledAgentConfig}, validated first
+    for channel, config in compiled.items():
+        out_dir = engine.write_output(config, f"./output/{channel}")
+        print(f"wrote {channel} -> {out_dir}")
+except CompilationError as err:
+    for issue in err.issues:
+        print(issue["severity"], issue["rule_id"], issue["message"])
 ```
 
-# Library Composition
-Here is a brief overview of the CXAS SCRAPI library's structure and the motivation behind that structure.
+Because `compile()` returns a `CompiledAgentConfig` *before* anything is written,
+you can inspect or post-process the compiled state — agents, instructions, merged
+tools/evals, deployment — and only call `write_output()` when you're ready.
 
-## [Core](src/cxas_scrapi/core)
-The `src/cxas_scrapi/core` directory contains the high level building blocks of CXAS SCRAPI, mapped to core resource types in the CXAS environment (Apps, Agents, Tools, Guardrails, Deployments, Sessions, etc.)
+The public exports live in
+[`cxas_scrapi.poly`](src/cxas_scrapi/poly/__init__.py): `PolymorphismEngine`,
+`CompilationError`, `AdapterCard`, `CompiledAgentConfig`, and the individual
+delta models.
 
-## [Utils](src/cxas_scrapi/utils)
-The `src/cxas_scrapi/utils` directory contains helper functions and background logic for pagination, response flattening, proto conversions, and external integrations like Google Sheets.
+---
 
-## [Evals](src/cxas_scrapi/evals)
-The `src/cxas_scrapi/evals` directory provides tools for executing and analyzing agent performance evaluations, including Golden tests and simulation runs, and extracting metrics like latency.
+## Validation rules
 
-## [CLI](src/cxas_scrapi/cli)
-The `src/cxas_scrapi/cli` directory implements the command line interface for SCRAPI, offering tools like `cxas lint` to automate development and validation workflows.
+Run via `cxas poly validate` (or as the `adapters` category of `cxas lint`). The
+`AD` prefix avoids collision with the `config` lint category, which owns
+`A001`–`A006`.
 
-## [Migration](src/cxas_scrapi/migration)
-The `src/cxas_scrapi/migration` directory contains tools to facilitate transitioning legacy Dialogflow CX agents to CXAS, including agent generation from flows and artifact building.
+| ID | Severity | Check |
+|----|----------|-------|
+| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types. |
+| `AD002` | error | Every agent referenced in `instructionDiffs`, `tools`, `modelOverrides`, `callbacks` exists in `agents/`. |
+| `AD003` | error | `replace_section` diffs set `sectionTag`, and that `<sectionTag>` exists in the target instruction. |
+| `AD004` | warning | A tool `remove` references a tool not in the base agent's tool list. |
+| `AD005` | error | A tool `add` references a tool defined neither in `tools/` nor in the adapter's `toolDefinitions`. |
+| `AD006` | warning | The adapter declares no `evaluations` entries. |
+| `AD007` | error | Two adapter cards target the same `metadata.channel`. |
 
-<!-- DOCUMENTATION -->
-# Documentation
+`cxas poly build --channel all` runs this validation first and writes **nothing**
+if any error-severity issue is found.
 
-The official documentation is hosted online at [https://googlecloudplatform.github.io/cxas-scrapi/stable/](https://googlecloudplatform.github.io/cxas-scrapi/stable/).
+---
 
-The documentation site is built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/). To run it locally:
+## When to use adapters vs. separate agents
 
-```sh
-# Install dependencies including docs extras
-uv sync --extra docs
+Reach for **adapters** when:
 
-# Start the local dev server
-uv run mkdocs serve
-```
+- The channels share the same core flow, tools, and business logic.
+- The differences are presentational or tuning — formatting, verbosity, pacing,
+  a handful of channel-only tools.
+- You want a single source of truth and one place to fix bugs.
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser. Changes to files in `docs/` will reload automatically.
+Build **separate agents** when:
 
-To build the static site without serving:
+- The channels have genuinely different conversation graphs or tool sets with
+  little overlap.
+- The "delta" would be larger than the base — at that point an adapter hides more
+  than it reveals.
 
-```sh
-mkdocs build          # output goes to site/
-mkdocs build --strict # also fails on warnings (used in CI)
-```
+A good rule of thumb: if you find yourself using `replace_section` on most
+sections, the channels probably want to be separate agents.
 
-<!-- CONTRIBUTING -->
-# Contributing
-We welcome any contributions or feature requests you would like to submit!
+---
 
-1. Fork the Project
-2. Create your Feature Branch (git checkout -b feature/AmazingFeature)
-3. Commit your Changes (git commit -m 'Add some AmazingFeature')
-4. Push to the Branch (git push origin feature/AmazingFeature)
-5. Open a Pull Request
+## Where to go next
 
-<!-- LICENSE -->
-# License
-Distributed under the Apache 2.0 License. See [LICENSE](LICENSE.txt) for more information.
+- **[Polymorphism guide](docs/guides/polymorphism.md)** — concepts and the
+  compilation model in depth.
+- **[Polymorphism pattern](docs/patterns/polymorphism.md)** — a full Bella Notte
+  chat-vs-voice walkthrough.
+- **[`cxas poly` CLI reference](docs/cli/poly.md)** — every flag for `build`,
+  `validate`, and `diff`.
+- **[Examples](examples/)** — the runnable Bella Notte project and its adapters.
+- **[Official docs](https://googlecloudplatform.github.io/cxas-scrapi/stable/)**
+  — install, authentication, and the full core SDK.
 
-<!-- CONTACT -->
-# Contact
-Patrick Marlow - [pmarlow@google.com](mailto:pmarlow@google.com) - [@kmaphoenix](https://github.com/kmaphoenix)
+---
 
-Project Link: [https://github.com/GoogleCloudPlatform/cxas-scrapi](https://github.com/GoogleCloudPlatform/cxas-scrapi)
+## Contributing
 
-<!-- REFERENCES -->
-# References
-* [CX Agent Studio Documentation](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps)
-* [CX Agent Studio Console](https://ces.cloud.google.com/)
+We welcome contributions and feature requests! Fork the project, create a feature
+branch, commit your changes, and open a pull request. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## License
+
+Distributed under the Apache 2.0 License. See [LICENSE.txt](LICENSE.txt).
+
+## References
+
+- [CX Agent Studio Documentation](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps)
+- [CX Agent Studio Console](https://ces.cloud.google.com/)
