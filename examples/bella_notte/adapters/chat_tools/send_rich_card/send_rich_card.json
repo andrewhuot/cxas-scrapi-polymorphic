@@ -1,0 +1,9 @@
+{
+  "name": "c1d2e3f4-5a6b-7c8d-9e0f-112233445566",
+  "displayName": "send_rich_card",
+  "pythonFunction": {
+    "name": "send_rich_card",
+    "pythonCode": "tools/send_rich_card/python_function/python_code.py",
+    "description": "Render a structured rich card in the chat widget. Use when confirming a reservation or takeout order: pass a title, a short body summary, and one or more action buttons (e.g. Confirm, Change). Returns a card payload the channel renders visually."
+  }
+}

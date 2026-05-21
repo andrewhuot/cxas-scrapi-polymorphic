@@ -48,6 +48,10 @@ from cxas_scrapi.migration.flow_visualizer import (
 from cxas_scrapi.migration.graph_visualizer import HighLevelGraphVisualizer
 from cxas_scrapi.migration.main_visualizer import MainVisualizer
 from cxas_scrapi.migration.playbook_visualizer import PlaybookTreeVisualizer
+
+# Polymorphism Engine
+from cxas_scrapi.poly.engine import PolymorphismEngine
+from cxas_scrapi.poly.models import AdapterCard, CompiledAgentConfig
 from cxas_scrapi.utils.changelog_utils import ChangelogUtils
 
 # Utilities
@@ -90,4 +94,7 @@ __all__ = [
     "HighLevelGraphVisualizer",
     "PlaybookTreeVisualizer",
     "MainVisualizer",
+    "PolymorphismEngine",
+    "AdapterCard",
+    "CompiledAgentConfig",
 ]

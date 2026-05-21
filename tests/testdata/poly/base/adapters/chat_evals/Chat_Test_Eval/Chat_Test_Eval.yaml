@@ -1,0 +1,12 @@
+displayName: Chat Test Eval
+description: Chat-only evaluation used by the poly engine test fixture.
+tags:
+  - poly
+  - chat
+golden:
+  turns:
+    - steps:
+        - userInput:
+            text: hi
+        - expectation:
+            note: Check_Chat_Greeting
