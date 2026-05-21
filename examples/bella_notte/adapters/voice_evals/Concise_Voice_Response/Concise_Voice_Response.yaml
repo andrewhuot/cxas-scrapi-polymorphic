@@ -1,0 +1,18 @@
+displayName: Concise Voice Response
+description: >-
+  Voice channel — the agent's spoken responses must avoid markdown/symbols
+  and stay short, since there is no screen and the text is read aloud.
+tags:
+  - polymorphism
+  - voice
+  - concise
+golden:
+  turns:
+    - steps:
+        - userInput:
+            text: "Hi, I'd like to book a table."
+        - expectation:
+            note: Greeting_Is_Spoken_And_Concise
+  evaluationExpectations:
+    - Concise Voice Persona
+    - No Technical Leakage

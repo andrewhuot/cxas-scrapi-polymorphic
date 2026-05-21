@@ -1,0 +1,9 @@
+{
+  "name": "00000000-0000-0000-0000-000000000003",
+  "displayName": "test_tool",
+  "pythonFunction": {
+    "name": "test_tool",
+    "pythonCode": "tools/test_tool/python_function/python_code.py",
+    "description": "A test tool that does nothing."
+  }
+}

@@ -1,0 +1,42 @@
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: chat
+  displayName: Test Chat Adapter
+  description: Chat adapter for the poly engine test fixture.
+
+instructionDiffs:
+  - agent: Test_Agent
+    mode: append
+    content: |
+      Chat-specific: use markdown and numbered lists.
+
+tools:
+  - agent: Test_Agent
+    add:
+      - extra_tool
+
+toolDefinitions:
+  - displayName: extra_tool
+    toolType: python
+    sourceDir: adapters/chat_tools/extra_tool
+
+modelOverrides:
+  - agent: Test_Agent
+    model: gemini-3-pro
+
+callbacks:
+  - agent: Test_Agent
+    type: before_model
+    pythonCode: adapters/chat_callbacks/inject_context.py
+    description: Chat-only context injection.
+
+evaluations:
+  - sourceDir: adapters/chat_evals
+
+deployment:
+  channelType: WEB_UI
+  modality: CHAT_ONLY
+  webWidgetConfig:
+    theme: LIGHT
+    webWidgetTitle: Test Chat

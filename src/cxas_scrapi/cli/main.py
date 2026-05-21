@@ -45,6 +45,7 @@ from cxas_scrapi.cli.migration_cli import (
 from cxas_scrapi.cli.migration_cli import (
     register as register_dfcx_cxas_subparsers,
 )
+from cxas_scrapi.cli.poly_cli import register as register_poly_subparser
 from cxas_scrapi.cli.trace_cli import register as register_trace_subparser
 from cxas_scrapi.core.apps import Apps
 from cxas_scrapi.core.evaluations import Evaluations, ExportFormat
@@ -1425,6 +1426,7 @@ def get_parser() -> argparse.ArgumentParser:
             "config",
             "structure",
             "schema",
+            "adapters",
         ],
         help="Only run a specific linter category.",
     )
@@ -1602,6 +1604,9 @@ def get_parser() -> argparse.ArgumentParser:
 
     # Subparsers for 'trace' — observability/debugging for past conversations.
     register_trace_subparser(subparsers)
+
+    # Subparsers for 'poly' — polymorphism engine (channel adapters).
+    register_poly_subparser(subparsers)
 
     return parser
 
