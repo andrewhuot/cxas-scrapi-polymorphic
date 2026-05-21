@@ -1,16 +1,11 @@
 # CX Agent Studio Scripting API (CXAS SCRAPI)
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE.txt)
-[![PyPI](https://img.shields.io/pypi/v/cxas-scrapi)](https://pypi.org/project/cxas-scrapi/)
-[![Python Unit Tests](https://github.com/GoogleCloudPlatform/cxas-scrapi/actions/workflows/ci.yml/badge.svg)](https://github.com/GoogleCloudPlatform/cxas-scrapi/actions/workflows/ci.yml)
+
 
 <html>
     <h2 align="center">
-      <img src="assets/cxas-scrapi-logo.png" width="256" alt="CXAS SCRAPI Logo"/>
+      Polymorphic Agents Experiment - Author one agent at the center. Compile channel-optimized variants at the edges.
     </h2>
-    <h3 align="center">
-      Author one agent at the center. Compile channel-optimized variants at the edges.
-    </h3>
     <h3 align="center">
       Important Links:
       <a href="https://googlecloudplatform.github.io/cxas-scrapi/stable/">Docs</a>,
