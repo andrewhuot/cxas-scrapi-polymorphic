@@ -1,0 +1,9 @@
+{
+  "gcp_project_id": "<YOUR_GCP_PROJECT_ID>",
+  "location": "<YOUR_GCP_REGION>",
+  "app_name": "poly-test",
+  "deployed_app_id": "<YOUR_DEPLOYED_APP_ID>",
+  "model": "gemini-3-flash",
+  "modality": "text",
+  "default_channel": "text"
+}

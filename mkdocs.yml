@@ -159,6 +159,7 @@ nav:
     - Slot Filling: patterns/slot-filling.md
     - Dynamic Prompting: patterns/dynamic-prompting.md
     - Self-Healing Errors: patterns/self-healing.md
+    - Polymorphism: patterns/polymorphism.md
   - Tutorials:
     - tutorials/index.md
     - Restaurant Reservation: tutorials/restaurant-reservation.md
@@ -203,6 +204,7 @@ nav:
     - Insights:
       - guides/insights/index.md
       - Scorecards: guides/insights/scorecards.md
+    - Polymorphism: guides/polymorphism.md
   - VS Code Extension:
     - vscode/index.md
     - Installation: vscode/installation.md
@@ -230,6 +232,7 @@ nav:
     - cxas local-test: cli/local-test.md
     - cxas init-github-action: cli/init-github-action.md
     - cxas lint: cli/lint.md
+    - cxas poly: cli/poly.md
     - cxas init: cli/init.md
     - cxas insights: cli/insights.md
   - API Reference:

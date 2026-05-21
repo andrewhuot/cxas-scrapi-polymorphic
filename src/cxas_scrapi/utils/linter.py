@@ -576,6 +576,26 @@ class Discovery:
     def discover_evaluation_expectations(self) -> dict[str, Path]:
         return self._discover_resource_dirs("evaluation_expectations")
 
+    def discover_adapters(self) -> dict[str, Path]:
+        """Return ``{filename: path}`` for channel adapter cards.
+
+        Scans ``app_root/adapters/`` for ``*.adapter.{yaml,yml,json}``.
+        """
+        if not self.app_root:
+            return {}
+        adapters_dir = self.app_root / "adapters"
+        if not adapters_dir.exists():
+            return {}
+        result = {}
+        for p in sorted(adapters_dir.iterdir()):
+            if p.is_file() and (
+                p.name.endswith(".adapter.yaml")
+                or p.name.endswith(".adapter.yml")
+                or p.name.endswith(".adapter.json")
+            ):
+                result[p.name] = p
+        return result
+
     def dir_name_to_display(self, dir_name: str) -> str:
         """Convert directory name to display name."""
         return dir_name.replace("_", " ")
@@ -772,6 +792,9 @@ def run_rules(  # noqa: C901
 
     # Evals
     _lint_files(_get_rules("evals"), discovery.discover_evals())
+
+    # Adapters — channel adapter cards (poly engine)
+    _lint_files(_get_rules("adapters"), discovery.discover_adapters())
 
     # Config — app config + agent configs
     config_rules = _get_rules("config")
