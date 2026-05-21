@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p \"$CLAUDE_PROJECT_DIR/.git/hooks\" && cp \"$CLAUDE_PROJECT_DIR/.githooks/commit-msg\" \"$CLAUDE_PROJECT_DIR/.git/hooks/commit-msg\" && chmod +x \"$CLAUDE_PROJECT_DIR/.git/hooks/commit-msg\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
