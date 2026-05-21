@@ -270,10 +270,20 @@ cxas poly diff chat --app-dir examples/bella_notte
 Channel: chat   (adapter: adapters/chat.adapter.yaml)
 
 agents/Bella_Notte_Host
-  instruction: + N line(s) append
+  instruction: + 7 line(s) append
+    + <channel_chat>
+    + You are responding in a web chat widget that renders Markdown.
+    + - Use **bold** for emphasis and short numbered lists for options.
+    + ...
   tools (2 -> 3):
     + send_rich_card
-  callbacks: + before_model (Inject rich card formatting hints…)
+  callbacks: + before_model (Inject rich card formatting hints for chat confirmations.)
+agents/Reservation_Agent
+  instruction: + 8 line(s) append
+    + <channel_chat>
+    + Present available time slots as a numbered, selectable list, e.g.:
+    +   1. 6:00 PM
+    + ...
 
 tools/
   + send_rich_card
@@ -284,6 +294,8 @@ evaluations/
 deployment.json
   + channelType: WEB_UI
   + modality: CHAT_ONLY
+  + theme: LIGHT
+  + webWidgetTitle: Bella Notte Reservations
 ```
 
 ### 5. Build the channels
@@ -293,7 +305,7 @@ cxas poly build --app-dir examples/bella_notte --output-dir ./output
 ```
 
 ```
-Compiled channel 'chat'  -> ./output/chat
+Compiled channel 'chat' -> ./output/chat
 Compiled channel 'voice' -> ./output/voice
 
 Done. 2 channel(s) written to ./output
@@ -473,5 +485,3 @@ Distributed under the Apache 2.0 License. See [LICENSE.txt](LICENSE.txt).
 
 - [CX Agent Studio Documentation](https://docs.cloud.google.com/customer-engagement-ai/conversational-agents/ps)
 - [CX Agent Studio Console](https://ces.cloud.google.com/)
-</content>
-</invoke>
