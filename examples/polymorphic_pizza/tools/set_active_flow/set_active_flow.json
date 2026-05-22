@@ -1,0 +1,9 @@
+{
+  "name": "efeb46fc-7b4d-4b5b-b661-5d358ea0c3ac",
+  "displayName": "set_active_flow",
+  "pythonFunction": {
+    "name": "set_active_flow",
+    "pythonCode": "tools/set_active_flow/python_function/python_code.py",
+    "description": "Classify the customer's request and route to the right specialist. Valid flows: 'order' (start a new pizza order) and 'track' (check the status of an existing order)."
+  }
+}

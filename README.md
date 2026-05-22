@@ -28,15 +28,16 @@ complete, channel-optimized project (chat, voice, …) for each target.
 ## Table of contents
 
 1. [The core idea](#the-core-idea)
-2. [Architecture at a glance](#architecture-at-a-glance)
-3. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
-4. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
-5. [Adapter card reference](#adapter-card-reference)
-6. [The compilation pipeline](#the-compilation-pipeline)
-7. [Driving the engine from Python](#driving-the-engine-from-python)
-8. [Validation rules](#validation-rules)
-9. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
-10. [Where to go next](#where-to-go-next)
+2. [Quickstart: the Polymorphic Pizza demo](#quickstart-the-polymorphic-pizza-demo)
+3. [Architecture at a glance](#architecture-at-a-glance)
+4. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
+5. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
+6. [Adapter card reference](#adapter-card-reference)
+7. [The compilation pipeline](#the-compilation-pipeline)
+8. [Driving the engine from Python](#driving-the-engine-from-python)
+9. [Validation rules](#validation-rules)
+10. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
+11. [Where to go next](#where-to-go-next)
 
 ---
 
@@ -80,6 +81,45 @@ The polymorphism happens entirely at **build time**. There is no special
 | **Canonical Agent Card** | Your ordinary, channel-neutral agent project — `app.json`, `agents/`, `tools/`, `evaluations/`. Nothing new to learn. | The project root |
 | **Channel Adapter Card** | A small YAML/JSON file describing what changes for one channel: instruction edits, tool add/remove, model overrides, extra callbacks, channel evals, and deployment settings. | `adapters/<channel>.adapter.yaml` |
 | **Polymorphism Engine** | The compiler. Reads the base project + adapter cards and writes one complete project directory per channel. | `cxas poly` / `cxas_scrapi.poly` |
+
+---
+
+## Quickstart: the Polymorphic Pizza demo
+
+Want to see it work right now? The repository ships a small, beginner-friendly
+demo — **Polymorphic Pizza** — that compiles **one** agent project into a
+**chat agent** and a **voice agent**. You do **not** need a Google Cloud account
+to build and inspect them.
+
+**Prerequisites:** Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+
+```bash
+# 1. Install the cxas CLI (once), from the repo root:
+uv sync --extra dev
+
+# 2. Validate the demo's two channel adapters:
+uv run cxas poly validate --app-dir examples/polymorphic_pizza
+
+# 3. Compile the base project into a chat agent and a voice agent:
+uv run cxas poly build --app-dir examples/polymorphic_pizza --output-dir ./output
+
+# 4. The output is just a normal project — lint it like any other:
+uv run cxas lint --app-dir ./output/chat
+uv run cxas lint --app-dir ./output/voice
+```
+
+You'll get two finished projects under `./output/`: `chat/` (Markdown plus a
+visual order card, deployed to a web widget) and `voice/` (short spoken turns,
+deployed to telephony) — both generated from the **same** `agents/`, `tools/`,
+and `evaluations/`. Want to preview the per-channel changes before building? Run
+`uv run cxas poly diff chat --app-dir examples/polymorphic_pizza` (or `voice`).
+
+Full file-by-file walkthrough, a chat-vs-voice comparison, and what to try next:
+**[examples/polymorphic_pizza/README.md](examples/polymorphic_pizza/README.md)**.
+
+> Prefer a more advanced example with a slot-filling framework? The
+> [step-by-step section below](#using-polymorphism-step-by-step) uses the larger
+> Bella Notte project.
 
 ---
 

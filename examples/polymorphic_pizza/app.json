@@ -1,0 +1,24 @@
+{
+  "name": "2ffecf0b-9182-478f-a93c-23378fe8a49d",
+  "displayName": "Polymorphic Pizza",
+  "rootAgent": "Pizza_Host",
+  "loggingSettings": {
+    "conversationLoggingSettings": {
+      "retentionWindow": "31536000s"
+    }
+  },
+  "evaluationMetricsThresholds": {
+    "goldenEvaluationMetricsThresholds": {
+      "turnLevelMetricsThresholds": {
+        "semanticSimilaritySuccessThreshold": 0
+      },
+      "toolMatchingSettings": {
+        "extraToolCallBehavior": "ALLOW"
+      }
+    },
+    "goldenHallucinationMetricBehavior": "DISABLED"
+  },
+  "timeZoneSettings": {
+    "timeZone": "America/Los_Angeles"
+  }
+}

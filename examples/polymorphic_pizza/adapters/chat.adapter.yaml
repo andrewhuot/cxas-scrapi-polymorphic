@@ -1,0 +1,64 @@
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: chat
+  displayName: Polymorphic Pizza — Chat
+  description: >-
+    Web chat optimization for Polymorphic Pizza. Enables rich, markdown
+    responses, numbered topping lists, and a visual order confirmation card.
+
+# Layer chat-specific behavior on top of the channel-neutral base instructions.
+instructionDiffs:
+  - agent: Pizza_Host
+    mode: append
+    content: |
+      <channel_chat>
+      You are responding in a web chat widget that renders Markdown.
+      - Use **bold** for emphasis and short numbered lists for choices.
+      - Keep paragraphs short; prefer bullets over long prose.
+      </channel_chat>
+
+  - agent: Order_Agent
+    mode: append
+    content: |
+      <channel_chat>
+      Present the sizes, specialty pizzas, and toppings as numbered,
+      scannable lists, e.g.:
+        1. Small
+        2. Medium
+        3. Large
+      Let the customer reply with a number or the name. When the order is
+      complete, call {@TOOL: send_order_card} to render a confirmation card
+      with the order summary, the total, and Confirm / Edit buttons instead
+      of plain text.
+      </channel_chat>
+
+# Make the order-card tool available to the order specialist, and define it.
+tools:
+  - agent: Order_Agent
+    add:
+      - send_order_card
+
+toolDefinitions:
+  - displayName: send_order_card
+    toolType: python
+    sourceDir: adapters/chat_tools/send_order_card
+
+# Inject order-card hints before the model call.
+callbacks:
+  - agent: Order_Agent
+    type: before_model
+    pythonCode: adapters/chat_callbacks/inject_order_card.py
+    description: Inject order-card formatting hints for chat confirmations.
+
+# Channel-specific evaluations.
+evaluations:
+  - sourceDir: adapters/chat_evals
+
+# Web UI, chat-only deployment.
+deployment:
+  channelType: WEB_UI
+  modality: CHAT_ONLY
+  webWidgetConfig:
+    theme: LIGHT
+    webWidgetTitle: Polymorphic Pizza

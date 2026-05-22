@@ -1,0 +1,34 @@
+{
+  "name": "happy-path-order-routing",
+  "displayName": "Happy Path - Order Routing",
+  "description": "The host silently routes a new-order request to the Order Agent via set_active_flow.",
+  "tags": [
+    "multi-agent",
+    "routing",
+    "order"
+  ],
+  "golden": {
+    "turns": [
+      {
+        "steps": [
+          {
+            "userInput": {
+              "text": "I'd like to order a pizza"
+            }
+          },
+          {
+            "expectation": {
+              "note": "Check_Set_Active_Flow_Order",
+              "toolCall": {
+                "tool": "set_active_flow",
+                "args": {
+                  "flow": "order"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

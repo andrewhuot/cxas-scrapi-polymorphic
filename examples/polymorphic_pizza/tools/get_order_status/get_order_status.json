@@ -1,0 +1,9 @@
+{
+  "name": "495385a0-b27d-422a-b878-292ed0dd0f24",
+  "displayName": "get_order_status",
+  "pythonFunction": {
+    "name": "get_order_status",
+    "pythonCode": "tools/get_order_status/python_function/python_code.py",
+    "description": "Look up the status of an existing order by its order number (e.g. 'PZA-1A2B3C'). Returns the current stage and an estimated time remaining."
+  }
+}

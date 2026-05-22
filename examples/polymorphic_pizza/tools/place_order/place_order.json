@@ -1,0 +1,9 @@
+{
+  "name": "120d3921-6b21-43f2-bfbb-2d13b390c8b2",
+  "displayName": "place_order",
+  "pythonFunction": {
+    "name": "place_order",
+    "pythonCode": "tools/place_order/python_function/python_code.py",
+    "description": "Place a confirmed pizza order. Pass the size, comma-separated toppings, fulfillment ('pickup' or 'delivery'), the customer's name, and (for delivery) the address. Returns an order number, the total price including any delivery fee, and an estimated time."
+  }
+}
