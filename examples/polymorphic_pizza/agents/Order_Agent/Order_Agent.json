@@ -1,0 +1,6 @@
+{
+  "name": "c0f8eec4-4561-49ff-9cc1-0bfc80205073",
+  "displayName": "Order_Agent",
+  "instruction": "agents/Order_Agent/instruction.txt",
+  "tools": ["get_menu", "quote_pizza", "place_order", "end_session"]
+}

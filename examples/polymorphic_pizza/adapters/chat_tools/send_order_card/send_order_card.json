@@ -1,0 +1,9 @@
+{
+  "name": "e8eb5687-c765-46eb-90fe-55c6e548a3bf",
+  "displayName": "send_order_card",
+  "pythonFunction": {
+    "name": "send_order_card",
+    "pythonCode": "tools/send_order_card/python_function/python_code.py",
+    "description": "Render a structured order confirmation card in the chat widget. Pass a title, a short summary of the order, the total, and comma-separated action button labels (e.g. 'Confirm,Edit'). Returns a card payload the widget renders visually."
+  }
+}

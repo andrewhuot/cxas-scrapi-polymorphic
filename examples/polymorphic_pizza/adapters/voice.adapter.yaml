@@ -1,0 +1,53 @@
+apiVersion: poly.cxas.dev/v1
+kind: ChannelAdapter
+metadata:
+  channel: voice
+  displayName: Polymorphic Pizza — Voice
+  description: >-
+    Telephony optimization for Polymorphic Pizza. Tunes the agents for
+    spoken, audio-only interaction: short turns, no markup, spelled-out
+    prices, and slow read-backs.
+
+# Voice deltas: the same base agents, specialized for an audio channel where
+# there is no screen and the caller cannot scan a list.
+instructionDiffs:
+  - agent: Pizza_Host
+    mode: append
+    content: |
+      <channel_voice>
+      You are speaking on a phone call. There is no screen.
+      - Keep every response to two or three short sentences.
+      - Never use Markdown, bullet points, emoji, or symbols.
+      - Spell out prices and numbers the way a person says them
+        (say "twelve dollars" rather than reading the digits).
+      - Before calling a tool, say a brief filler such as
+        "Let me check that for you..." so the line is not silent.
+      </channel_voice>
+
+  - agent: Order_Agent
+    mode: append
+    content: |
+      <channel_voice>
+      Offer at most three choices at a time, spoken aloud, and ask the caller
+      to pick one. Read the final order back slowly, one detail at a time —
+      the size, then the toppings, then pickup or delivery, then the name —
+      and state the total in spoken dollars before placing it.
+      </channel_voice>
+
+# Inject pacing hints before the model call.
+callbacks:
+  - agent: Order_Agent
+    type: before_model
+    pythonCode: adapters/voice_callbacks/voice_pacing.py
+    description: Inject voice pacing and filler-phrase hints.
+
+# Channel-specific evaluations.
+evaluations:
+  - sourceDir: adapters/voice_evals
+
+# Telephony, voice-only deployment.
+deployment:
+  channelType: GOOGLE_TELEPHONY_PLATFORM
+  modality: VOICE_ONLY
+  disableBargeInControl: false
+  disableDtmf: false

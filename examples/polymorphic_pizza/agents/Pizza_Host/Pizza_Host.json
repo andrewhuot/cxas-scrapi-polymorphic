@@ -1,0 +1,15 @@
+{
+  "name": "961e2e38-9415-4e35-85fe-a73589c03247",
+  "displayName": "Pizza_Host",
+  "instruction": "agents/Pizza_Host/instruction.txt",
+  "tools": ["set_active_flow", "end_session"],
+  "childAgents": ["Order_Agent", "Tracking_Agent"],
+  "beforeModelCallbacks": [{
+    "pythonCode": "agents/Pizza_Host/before_model_callbacks/before_model_callbacks_01/python_code.py",
+    "description": "Hide transfer_to_agent; fire pending transfers."
+  }],
+  "afterToolCallbacks": [{
+    "pythonCode": "agents/Pizza_Host/after_tool_callbacks/after_tool_callbacks_01/python_code.py",
+    "description": "Capture set_active_flow result and prepare transfer."
+  }]
+}

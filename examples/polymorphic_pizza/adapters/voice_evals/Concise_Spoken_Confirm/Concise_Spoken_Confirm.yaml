@@ -1,0 +1,16 @@
+displayName: Concise Spoken Confirm
+description: >-
+  Voice channel — when the caller confirms, the agent should place the order
+  with the place_order tool, keeping the spoken turn short.
+tags:
+  - polymorphism
+  - voice
+golden:
+  turns:
+    - steps:
+        - userInput:
+            text: "Yes, go ahead and place it."
+        - expectation:
+            note: Check_PlaceOrder_Called
+            toolCall:
+              tool: place_order

@@ -1,0 +1,6 @@
+{
+  "name": "de79127e-1d98-4490-8fd1-3231c3f63ac4",
+  "displayName": "Tracking_Agent",
+  "instruction": "agents/Tracking_Agent/instruction.txt",
+  "tools": ["get_order_status", "end_session"]
+}

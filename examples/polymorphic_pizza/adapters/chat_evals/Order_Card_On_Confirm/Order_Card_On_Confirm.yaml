@@ -1,0 +1,18 @@
+displayName: Order Card On Confirm
+description: >-
+  Chat channel — when the order is complete and the customer confirms, the
+  agent should render the confirmation via the send_order_card tool rather
+  than plain text.
+tags:
+  - polymorphism
+  - chat
+  - order-card
+golden:
+  turns:
+    - steps:
+        - userInput:
+            text: "Yes, that's right — please place the order."
+        - expectation:
+            note: Check_SendOrderCard_Called
+            toolCall:
+              tool: send_order_card
