@@ -28,6 +28,27 @@ source .venv/bin/activate
 
 Requires Python 3.10+ and [astral-uv](https://docs.astral.sh/uv/getting-started/installation/).
 
+## GitHub / PR Targeting
+
+This workspace has both:
+
+- `origin` -> `https://github.com/andrewhuot/cxas-scrapi-polymorphic.git`
+- `upstream` -> `https://github.com/GoogleCloudPlatform/cxas-scrapi.git`
+
+Unless the user explicitly asks otherwise, draft and open PRs against
+`andrewhuot/cxas-scrapi-polymorphic`, not `GoogleCloudPlatform/cxas-scrapi`.
+Before creating a PR, verify the target repository with:
+
+```bash
+gh repo view --json nameWithOwner,defaultBranchRef
+```
+
+The expected default target for this workspace is:
+
+```text
+andrewhuot/cxas-scrapi-polymorphic
+```
+
 ## Available Skills
 
 This workspace provides several specialized AI skills to assist with development. 
