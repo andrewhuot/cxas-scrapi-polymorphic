@@ -75,6 +75,10 @@ callbacks:
     pythonCode: adapters/chat_callbacks/inject_rich_content.py
     description: Inject rich card formatting hints for chat confirmations.
 
+gecxConfig:
+  model: gemini-3-pro
+  modality: text
+
 evaluations:
   - sourceDir: adapters/chat_evals
 
@@ -92,7 +96,7 @@ Section by section:
 - **`tools` + `toolDefinitions`** — make `send_rich_card` available to the host *and* bring its definition (`send_rich_card.json` + `python_code.py`) into `tools/`. The engine normalizes the tool's code path to the canonical `tools/send_rich_card/python_function/python_code.py`.
 - **`callbacks`** — append a `before_model` callback. The base host already has `before_model_callbacks_01`, so this becomes `before_model_callbacks_02` automatically.
 - **`evaluations`** — fold the `adapters/chat_evals/` directory into the compiled `evaluations/`.
-- **`deployment`** — fold a `deployment` block (`channel_type: WEB_UI`, `modality: CHAT_ONLY`, widget settings) into the compiled `gecx-config.json`, and set `default_channel`/`modality`.
+- **`gecxConfig` + `deployment`** — fold channel runtime defaults plus a deployment block (`channel_type: WEB_UI`, `modality: CHAT_ONLY`, widget settings) into the compiled `gecx-config.json`, and set `default_channel`/`modality`.
 
 ---
 
@@ -132,6 +136,10 @@ callbacks:
     pythonCode: adapters/voice_callbacks/voice_pacing.py
     description: Inject voice pacing and filler-phrase hints.
 
+gecxConfig:
+  model: gemini-3-flash
+  modality: audio
+
 evaluations:
   - sourceDir: adapters/voice_evals
 
@@ -142,7 +150,7 @@ deployment:
   disableDtmf: false
 ```
 
-The voice adapter is almost entirely additive: it never touches the base tool list, because the base host has no chat-only tools to remove. (If a rich-card tool *were* present in the base, you'd add a `tools: [{agent: …, remove: [send_rich_card]}]` here.)
+The voice adapter is almost entirely additive: it never touches the base tool list, because the base host has no chat-only tools to remove. (If a rich-card tool *were* present in the base, you'd add a `tools: [{agent: …, remove: [send_rich_card]}]` here.) It also sets voice runtime defaults in `gecxConfig`, so the compiled project carries audio modality and a voice-appropriate model before deployment.
 
 Notice the symmetry: both adapters `append` a channel block and add a `before_model` callback, but they pull behavior in opposite directions — verbose-and-visual vs. terse-and-spoken — from the same base.
 
@@ -183,6 +191,9 @@ tools/
 
 evaluations/
   + 1 eval(s): Rich_Card_Confirmation
+
+gecx-config.json (channel config)
+  ~ model: gemini-3-pro
 
 gecx-config.json (deployment)
   + channel_type: WEB_UI

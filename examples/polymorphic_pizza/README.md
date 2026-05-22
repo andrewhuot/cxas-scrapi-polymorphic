@@ -153,6 +153,7 @@ cat ./output/voice/agents/Order_Agent/instruction.txt
 |---|---|---|
 | **Instructions add** | Markdown, numbered lists, a confirmation card | 2–3 sentence turns, no symbols, spoken prices |
 | **Extra tool** | `send_order_card` (visual card) | none |
+| **Model/runtime config** | `gemini-3-pro`, text modality | `gemini-3-flash`, audio modality |
 | **Deployment** | `WEB_UI` / `CHAT_ONLY` | `GOOGLE_TELEPHONY_PLATFORM` / `VOICE_ONLY` |
 | **gecx-config modality** | `text` | `audio` |
 

@@ -39,6 +39,11 @@ instructionDiffs:
 # The base host has no send_rich_card tool, so there is nothing to remove.
 # (If a rich-card tool were present in the base, add a tools.remove here.)
 
+# Channel-specific runtime defaults folded into the compiled gecx-config.json.
+gecxConfig:
+  model: gemini-3-flash
+  modality: audio
+
 # Inject pacing hints before the model call.
 callbacks:
   - agent: Bella_Notte_Host

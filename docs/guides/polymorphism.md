@@ -18,7 +18,7 @@ The naive answer is to fork: maintain `bella_notte_chat/` and `bella_notte_voice
 | Primitive | What it is | Where it lives |
 |---|---|---|
 | **Canonical Agent Card** | Your existing, channel-neutral agent project — `app.json`, `agents/`, `tools/`, `evaluations/`. Nothing new to learn. | The project root |
-| **Channel Adapter Card** | A small YAML/JSON file describing what changes for one channel: instruction additions, tool add/remove, model overrides, extra callbacks, channel evals, and deployment settings. | `adapters/<channel>.adapter.yaml` |
+| **Channel Adapter Card** | A small YAML/JSON file describing what changes for one channel: instruction additions, tool add/remove, model overrides, runtime config, extra callbacks, channel evals, and deployment settings. | `adapters/<channel>.adapter.yaml` |
 | **Polymorphism Engine** | The compiler. Reads the base project + adapter cards and writes one complete project directory per channel. | `cxas poly` / `cxas_scrapi.poly` |
 
 ---
@@ -51,7 +51,8 @@ Each adapter applies, in order:
 4. **Model overrides** — set `modelSettings.model` per agent for the channel.
 5. **Callbacks** — append channel-specific callbacks, auto-numbered after any existing ones (`before_model_callbacks_02`, …).
 6. **Evaluations** — merge channel-specific evaluation directories into `evaluations/`.
-7. **Deployment** — fold a `deployment` block (channel/modality/widget settings) into `gecx-config.json` — the file deploy tooling reads — and set `default_channel`/`modality`.
+7. **Runtime config** — deep-merge a `gecxConfig` block into `gecx-config.json` for channel defaults such as model or modality.
+8. **Deployment** — fold a `deployment` block (channel/modality/widget settings) into `gecx-config.json` — the file deploy tooling reads — and set `default_channel`/`modality`.
 
 ---
 

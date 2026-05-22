@@ -68,6 +68,29 @@ def test_compiled_output_lints_clean(bella_notte_dir: Path, tmp_path: Path):
         )
 
 
+def test_polymorphic_pizza_showcases_channel_specific_runtime_config(
+    polymorphic_pizza_dir: Path,
+):
+    """The product demo proves model/runtime config differs by channel."""
+    eng = PolymorphismEngine(str(polymorphic_pizza_dir))
+    compiled = eng.compile_all()
+    chat = compiled["chat"]
+    voice = compiled["voice"]
+
+    assert chat.gecx_config["model"] == "gemini-3-pro"
+    assert chat.gecx_config["modality"] == "text"
+    assert chat.agents["Order_Agent"]["modelSettings"]["model"] == "gemini-3-pro"
+    assert "send_order_card" in chat.agents["Order_Agent"]["tools"]
+
+    assert voice.gecx_config["model"] == "gemini-3-flash"
+    assert voice.gecx_config["modality"] == "audio"
+    assert (
+        voice.agents["Order_Agent"]["modelSettings"]["model"]
+        == "gemini-3-flash"
+    )
+    assert "send_order_card" not in voice.agents["Order_Agent"]["tools"]
+
+
 # ── Safe output writer ─────────────────────────────────────────────────────
 
 

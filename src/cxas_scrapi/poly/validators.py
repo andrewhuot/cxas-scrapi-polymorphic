@@ -26,7 +26,7 @@ Note on rule IDs: the original spec proposed ``A001``-``A007`` but those
 collide with the existing ``config`` lint rules, so adapter rules use the
 ``AD`` prefix.
 
-    AD001  schema / required fields
+    AD001  schema / required fields / unknown fields
     AD002  referenced agents exist
     AD003  replace_section sectionTag present and the section exists
     AD004  tool remove targets a tool the base agent actually has  (warning)

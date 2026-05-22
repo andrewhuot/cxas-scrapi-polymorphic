@@ -169,11 +169,14 @@ Pydantic models that define the **shape of an adapter card**. The top-level
 - `model_overrides` (`List[ModelOverride]`) — per-agent model swap.
 - `callbacks` (`List[CallbackDefinition]`) — channel-specific callbacks.
 - `evaluations` (`List[EvalReference]`) — extra eval directories to merge.
+- `gecx_config` (`Dict[str, Any]`) — channel-specific `gecx-config.json`
+  overlay.
 - `deployment` (`Optional[DeploymentOverride]`) — channel/modality/widget config.
 
 Every model uses `populate_by_name=True`, so cards can be written in friendly
 **camelCase** (`displayName`, `sectionTag`, `pythonCode`) while the Python code
-reads them as snake_case. The result of a compile is a
+reads them as snake_case. Unknown fields are rejected instead of ignored, so a
+typo in an adapter cannot silently disappear. The result of a compile is a
 [`CompiledAgentConfig`](src/cxas_scrapi/poly/models.py): a pure-data snapshot of
 everything the engine will write to disk, so callers can introspect or transform
 it before anything touches the filesystem.
@@ -365,7 +368,7 @@ channel-specific surfaces fall out of two short adapter files.
 
 ## Adapter card reference
 
-An adapter card declares deltas in seven optional sections. Each is applied to
+An adapter card declares deltas in optional sections. Each is applied to
 the deep-copied base during compilation.
 
 | Section | Field | What it does |
@@ -376,6 +379,7 @@ the deep-copied base during compilation.
 | **Model overrides** | `modelOverrides[]` | Set `modelSettings.model` for an agent in this channel. |
 | **Callbacks** | `callbacks[]` | Append a channel-specific callback (`before_model`, `after_model`, `before_tool`, `after_tool`, `before_agent`, `after_agent`). Auto-numbered after any existing ones. |
 | **Evaluations** | `evaluations[]`, `evaluationExpectations[]`, `evaluationDatasets[]` | Merge a `sourceDir` of channel-specific evaluations, expectations, and datasets into the matching output directories. |
+| **Runtime config** | `gecxConfig` | Deep-merge channel-specific `gecx-config.json` defaults such as model or modality before compiler-owned fields are finalized. |
 | **Deployment** | `deployment` | Fold a `deployment` block (channel type, modality, web-widget config) into `gecx-config.json` — the file deploy tooling reads — and set `default_channel`/`modality`. |
 
 Two conveniences worth knowing:
@@ -411,9 +415,10 @@ deterministic order. Understanding the order explains the output:
 7. **Callbacks.** Append channel callbacks, auto-numbering after existing ones
    (e.g. a second `before_model` callback becomes `before_model_callbacks_02`).
 8. **Evaluations.** Merge each channel eval / expectation / dataset directory.
-9. **Deployment + gecx config.** Fold the `deployment` block into
-   `gecx-config.json`; set `default_channel`, `app_dir`, and (for voice)
-   `modality`.
+9. **Runtime config.** Deep-merge `gecxConfig` into `gecx-config.json`.
+10. **Deployment + gecx config.** Fold the `deployment` block into
+    `gecx-config.json`; set `default_channel`, `app_dir`, and (for voice)
+    `modality`.
 
 Validation surfaces *every* problem at once: all issues are accumulated and, if
 any are errors, raised together as a single `CompilationError` — the engine never
@@ -464,7 +469,7 @@ Run via `cxas poly validate` (or as the `adapters` category of `cxas lint`). The
 
 | ID | Severity | Check |
 |----|----------|-------|
-| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types (malformed cards report here, not as a traceback). |
+| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`), valid types, and no unknown fields (malformed cards report here, not as a traceback). |
 | `AD002` | error | Every agent referenced in `instructionDiffs`, `tools`, `modelOverrides`, `callbacks` exists in `agents/`. |
 | `AD003` | error | `replace_section` diffs set `sectionTag`, and a matching `<sectionTag …>…</sectionTag>` block (attributes allowed) exists in the target instruction. |
 | `AD004` | warning | A tool `remove` references a tool not in the base agent's tool list. |

@@ -163,6 +163,7 @@ class PolymorphismEngine:
         self.base: Optional[BaseProject] = None
         # channel -> (card, card_path)
         self.adapters: Dict[str, Tuple[AdapterCard, Path]] = {}
+        self.adapter_cards: List[Tuple[AdapterCard, Path]] = []
         # Per-file parse / schema errors collected by ``load_adapter_cards``
         # (issue dicts).  A malformed card is recorded here instead of raising,
         # so one bad card never blocks compiling the others.
@@ -287,6 +288,7 @@ class PolymorphismEngine:
         adapters_dir = self.app_dir / "adapters"
         cards: List[AdapterCard] = []
         self.adapters = {}
+        self.adapter_cards = []
         self.adapter_errors = []
         if not adapters_dir.exists():
             return cards
@@ -325,6 +327,7 @@ class PolymorphismEngine:
                 )
                 continue
             cards.append(card)
+            self.adapter_cards.append((card, path))
             self.adapters[card.metadata.channel] = (card, path)
         return cards
 
@@ -478,6 +481,7 @@ class PolymorphismEngine:
 
         # Step 8: deployment + gecx config.
         gecx_config = copy.deepcopy(self.base.gecx_config)
+        self._deep_merge(gecx_config, adapter.gecx_config)
         gecx_config["default_channel"] = channel
         # The compiled output is always a direct-layout project rooted at
         # the channel directory, so the linter's app_dir must be ".".
@@ -528,9 +532,9 @@ class PolymorphismEngine:
         """
         if self.base is None:
             self.load_base_project()
-        cards = self.load_adapter_cards()
+        self.load_adapter_cards()
 
-        adapters = [c for c, _ in self.adapters.values()]
+        adapters = [c for c, _ in self.adapter_cards]
         issues = list(self.adapter_errors)
         issues += validate_all_adapters(adapters, str(self.app_dir))
         errors = [i for i in issues if i.get("severity") == "error"]
@@ -538,8 +542,7 @@ class PolymorphismEngine:
             raise CompilationError(errors)
 
         result: Dict[str, CompiledAgentConfig] = {}
-        for card in cards:
-            _, path = self.adapters[card.metadata.channel]
+        for card, path in self.adapter_cards:
             result[card.metadata.channel] = self.compile(
                 card, path, validate=False
             )
@@ -558,7 +561,8 @@ class PolymorphismEngine:
         Untouched base items (tools/, evaluations/, evaluationExpectations/,
         evaluationDatasets/, cxaslint.yaml, etc.) are copied verbatim;
         agents, app.json and gecx-config.json are reconstructed from the
-        compiled state; channel-specific tools/evaluations are added.
+        compiled state; channel-specific tools/evaluations/runtime config are
+        added.
 
         Safety: the target is replaced only when it is empty, was produced by a
         previous ``cxas poly build`` (carries the ``.poly_build.json`` marker),
@@ -685,6 +689,18 @@ class PolymorphismEngine:
     @staticmethod
     def _write_json(path: Path, data: Dict[str, Any]) -> None:
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _deep_merge(target: Dict[str, Any], overlay: Dict[str, Any]) -> None:
+        """Recursively merge ``overlay`` into ``target`` in place."""
+        for key, value in overlay.items():
+            if (
+                isinstance(value, dict)
+                and isinstance(target.get(key), dict)
+            ):
+                PolymorphismEngine._deep_merge(target[key], value)
+            else:
+                target[key] = copy.deepcopy(value)
 
     @staticmethod
     def _next_callback_index(entries: List[Dict[str, Any]]) -> int:
