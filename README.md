@@ -280,7 +280,9 @@ By default, `init` includes a starter eval so validation does not immediately
 warn about missing channel coverage. Use `--dry-run` to inspect planned files or
 `--no-eval` for a non-behavioral adapter. The generated content is intentionally
 plain: replace it with real channel-specific instructions, evals, and runtime
-hooks before shipping.
+hooks before shipping. Callback stubs use the correct entry function and typed
+signature for each hook (`before_model`, `after_tool`, and so on), so the
+compiled output starts from the same callback contract the linter enforces.
 
 ### 3. Write a channel adapter card
 
@@ -446,6 +448,9 @@ Two conveniences worth knowing:
 
 - **Agents may be referenced by display name or directory name** — the engine
   resolves either form.
+- **Referenced files are project-relative.** Adapter `sourceDir` and
+  `pythonCode` values must be relative to the app root; absolute paths and
+  `..` escapes are rejected so builds stay portable.
 - **`replace_section` is surgical.** It only replaces the matched `<tag>…</tag>`
   block, so the rest of the instruction stays byte-for-byte intact. If most of
   your sections need `replace_section`, that's a signal the channels may want to
@@ -536,7 +541,7 @@ Run via `cxas poly validate` (or as the `adapters` category of `cxas lint`). The
 | `AD005` | error | A tool `add` references a tool defined neither in `tools/`, the adapter's `toolDefinitions`, nor a platform tool; or a referenced `pythonCode`/`sourceDir` is missing. |
 | `AD006` | warning | The adapter declares no `evaluations` entries. |
 | `AD007` | error | Two adapter cards target the same `metadata.channel`. |
-| `AD008` | error | A referenced `sourceDir`/`pythonCode` path escapes the project root. |
+| `AD008` | error | A referenced `sourceDir`/`pythonCode` path is absolute or escapes the project root. |
 | `AD009` | error | `deployment` `channelType`/`modality`/`theme` use known, supported values. |
 | `AD010` | error | `toolDefinitions` declare a supported `toolType` (`python`, `openapi`). |
 

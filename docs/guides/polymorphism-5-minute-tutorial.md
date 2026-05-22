@@ -77,7 +77,10 @@ This creates a minimal but valid starter workflow around the adapter:
 
 The generated content is intentionally conservative. It gives you a valid place
 for channel-specific instructions, evals, callback logic, and channel-only tool
-code without inventing unsupported adapter-card fields.
+code without inventing unsupported adapter-card fields. Callback stubs use the
+right entry function and typed signature for their hook, and all generated
+`sourceDir`/`pythonCode` references are project-relative so the adapter stays
+portable.
 
 If you only want to preview what would be written, add `--dry-run`.
 

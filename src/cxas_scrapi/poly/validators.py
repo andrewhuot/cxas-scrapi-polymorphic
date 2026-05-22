@@ -33,7 +33,7 @@ collide with the existing ``config`` lint rules, so adapter rules use the
     AD005  referenced source missing / tool add has no definition
     AD006  adapter declares at least one evaluations entry          (warning)
     AD007  two adapters target the same channel
-    AD008  a referenced path escapes the project root
+    AD008  a referenced path is absolute or escapes the project root
     AD009  deployment channelType/modality/theme is a known value
     AD010  toolDefinitions.toolType is supported
 """
@@ -80,10 +80,14 @@ def resolve_within(app_dir: str, ref: str) -> Tuple[Path, bool]:
 
     Adapter ``sourceDir``/``pythonCode`` references are interpreted relative to
     the project root (``app_dir``).  Returns ``(resolved_path, is_inside)``
-    where ``is_inside`` is False for absolute paths or anything that escapes the
-    root via ``..`` — the engine and validators both refuse those.
+    where ``is_inside`` is False for absolute paths or anything that escapes
+    the root via ``..`` — the engine and validators both refuse those so cards
+    stay portable across machines.
     """
     base = Path(app_dir).resolve()
+    raw = Path(ref)
+    if raw.is_absolute():
+        return raw.resolve(), False
     candidate = (base / ref).resolve()
     try:
         candidate.relative_to(base)
@@ -310,7 +314,7 @@ def validate_adapter_card(
                 "AD008",
                 ERROR,
                 f"toolDefinitions[{i}] sourceDir '{td.source_dir}' resolves "
-                "outside the project root",
+                "to an absolute path or outside the project root",
             )
         elif not _dir_has_json(path):
             add(
@@ -328,7 +332,7 @@ def validate_adapter_card(
                 "AD008",
                 ERROR,
                 f"callbacks[{i}] pythonCode '{cb.python_code}' resolves "
-                "outside the project root",
+                "to an absolute path or outside the project root",
             )
         elif not path.is_file():
             add(
@@ -351,7 +355,7 @@ def validate_adapter_card(
                     "AD008",
                     ERROR,
                     f"{label}[{i}] sourceDir '{ev.source_dir}' resolves "
-                    "outside the project root",
+                    "to an absolute path or outside the project root",
                 )
             elif not path.is_dir():
                 add(

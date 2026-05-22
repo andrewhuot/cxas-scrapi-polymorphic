@@ -197,8 +197,10 @@ uv run cxas poly init \
 ```
 
 That creates `adapters/sms.adapter.yaml`, a starter SMS eval, a starter callback,
-and a channel-only tool folder. Replace the generated placeholder behavior with
-real SMS-specific UX before building.
+and a channel-only tool folder. The callback stub starts with the correct
+hook-specific function signature, and the adapter references it with a
+project-relative `pythonCode` path. Replace the generated placeholder behavior
+with real SMS-specific UX before building.
 
 ---
 

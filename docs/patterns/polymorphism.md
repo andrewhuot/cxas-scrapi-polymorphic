@@ -49,7 +49,9 @@ cxas poly init \
 That writes a valid `adapters/sms.adapter.yaml` plus a starter eval directory
 and callback file. The generated content is intentionally generic; keep the
 adapter shape, then replace the scaffolded instruction block, eval assertion,
-and callback hint with real SMS behavior.
+and callback hint with real SMS behavior. The callback stub already has the
+right hook-specific function name and typed signature, and the card references
+it with a project-relative `pythonCode` path.
 
 Use `--dry-run` before writing, `--force` only when replacing known scaffold
 files, and `--with-tool <snake_case_name>` when the channel needs a

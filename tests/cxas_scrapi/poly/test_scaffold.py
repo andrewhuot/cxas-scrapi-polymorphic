@@ -19,13 +19,20 @@ from pathlib import Path
 import pytest
 import yaml
 
-from cxas_scrapi.poly.engine import PolymorphismEngine
+from cxas_scrapi.poly.engine import CALLBACK_TYPE_TO_DIR, PolymorphismEngine
 from cxas_scrapi.poly.scaffold import (
     ScaffoldOptions,
     build_scaffold_plan,
     write_scaffold_plan,
 )
 from cxas_scrapi.poly.validators import validate_adapter_card
+from cxas_scrapi.utils.lint_rules.callbacks import (
+    InvalidPythonSyntax,
+    MissingTypingImport,
+    WrongArgCount,
+    WrongCallbackSignature,
+)
+from cxas_scrapi.utils.linter import LintContext
 
 
 def test_scaffold_writes_valid_adapter_assets(copied_base: Path):
@@ -99,3 +106,50 @@ def test_scaffold_deployment_none_omits_deployment(copied_base: Path):
     adapter = yaml.safe_load(adapter_file.content)
 
     assert "deployment" not in adapter
+
+
+def test_scaffold_callback_stubs_match_each_hook_signature(
+    copied_base: Path, tmp_path: Path
+):
+    callback_types = tuple(CALLBACK_TYPE_TO_DIR)
+    plan = build_scaffold_plan(
+        ScaffoldOptions(
+            app_dir=copied_base,
+            channels=["sms"],
+            callback_types=callback_types,
+        )
+    )
+    context = LintContext(
+        project_root=tmp_path,
+        app_dir=tmp_path,
+        evals_dir=tmp_path / "evaluations",
+    )
+    rules = [
+        WrongArgCount(),
+        MissingTypingImport(),
+        WrongCallbackSignature(),
+        InvalidPythonSyntax(),
+    ]
+
+    for callback_type in callback_types:
+        scaffold_file = next(
+            f for f in plan.files if f.path.name == f"{callback_type}.py"
+        )
+        callback_dir = CALLBACK_TYPE_TO_DIR[callback_type]
+        lint_path = (
+            tmp_path
+            / "agents"
+            / "Test_Agent"
+            / callback_dir
+            / f"{callback_dir}_01"
+            / "python_code.py"
+        )
+        lint_path.parent.mkdir(parents=True, exist_ok=True)
+        lint_path.write_text(scaffold_file.content)
+
+        messages = [
+            f"{result.rule_id}: {result.message}"
+            for rule in rules
+            for result in rule.check(lint_path, scaffold_file.content, context)
+        ]
+        assert messages == []

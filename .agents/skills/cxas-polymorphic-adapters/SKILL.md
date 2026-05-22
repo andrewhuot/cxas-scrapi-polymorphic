@@ -143,8 +143,8 @@ Key conventions:
   instruction.
 - `tools.add` must resolve to a base tool, a same-card `toolDefinitions`
   entry, or a supported platform tool.
-- All `sourceDir` and `pythonCode` paths are relative to the app root and must
-  not escape it.
+- All `sourceDir` and `pythonCode` paths are relative to the app root. Absolute
+  paths and `..` escapes are rejected so adapter cards stay portable.
 
 ## Validation Rules
 
@@ -158,7 +158,7 @@ These are the same rule IDs surfaced by `cxas poly validate`, `cxas lint`, and
 - `AD005`: missing tool definition, callback file, or source directory
 - `AD006`: adapter has no `evaluations` entries
 - `AD007`: duplicate `metadata.channel`
-- `AD008`: path escapes the app root
+- `AD008`: path is absolute or escapes the app root
 - `AD009`: unsupported deployment enum value
 - `AD010`: unsupported `toolType`
 
@@ -240,8 +240,8 @@ Use those as templates when authoring new adapters.
 - Do not document unsupported adapter fields. If a requested delta is not in
   `AdapterCard`, call that out and suggest a supported alternative or source
   change.
-- Do not use paths outside the app root in adapter cards; validators reject
-  path escapes.
+- Do not use absolute paths or paths outside the app root in adapter cards;
+  validators reject non-portable path references.
 - Every behavior-changing adapter should have at least one channel-specific
   eval entry unless the user intentionally accepts the `AD006` warning.
 - Never hand-edit compiled output directories; rebuild from the base plus

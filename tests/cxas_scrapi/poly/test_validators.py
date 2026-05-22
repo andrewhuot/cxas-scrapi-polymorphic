@@ -187,6 +187,24 @@ def test_ad008_path_escapes_project(base_dir: Path):
     assert ad008 and ad008[0]["severity"] == "error"
 
 
+def test_ad008_absolute_path_inside_project_is_not_portable(base_dir: Path):
+    callback = (
+        base_dir / "adapters" / "chat_callbacks" / "inject_context.py"
+    ).resolve()
+    card = _card(
+        callbacks=[
+            {
+                "agent": "Test_Agent",
+                "type": "before_model",
+                "pythonCode": str(callback),
+            }
+        ]
+    )
+    issues = validate_adapter_card(card, str(base_dir))
+    ad008 = [i for i in issues if i["rule_id"] == "AD008"]
+    assert ad008 and ad008[0]["severity"] == "error"
+
+
 def test_ad009_invalid_channel_type(base_dir: Path):
     card = _card(deployment={"channelType": "NOT_A_CHANNEL"})
     issues = validate_adapter_card(card, str(base_dir))

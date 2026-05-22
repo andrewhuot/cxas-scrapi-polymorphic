@@ -55,7 +55,7 @@ comma-separated channel list. In automation, pass `--channel` explicitly.
 | `--deployment-target VALUE` | No | `auto` | `auto`, `none`, or a supported `deployment.channelType` enum such as `WEB_UI`, `API`, `TWILIO`, or `GOOGLE_TELEPHONY_PLATFORM`. |
 | `--modality VALUE` | No | `auto` | `auto`, `none`, or a supported modality enum such as `CHAT_ONLY` or `VOICE_ONLY`. |
 | `--with-tool TOOL_NAME` | No | none | Create a channel-only Python tool under `adapters/<channel>_tools/` and reference it via `toolDefinitions`. May be repeated. |
-| `--with-callback TYPE` | No | none | Create and reference a starter callback. Supported types match the adapter schema: `before_model`, `after_model`, `before_tool`, `after_tool`, `before_agent`, `after_agent`. |
+| `--with-callback TYPE` | No | none | Create and reference a starter callback with the hook-specific entry function and typed signature. Supported types match the adapter schema: `before_model`, `after_model`, `before_tool`, `after_tool`, `before_agent`, `after_agent`. |
 | `--no-eval` | No | off | Skip the starter `adapters/<channel>_evals/` directory. |
 | `--dry-run` | No | off | Print planned files without writing. |
 | `--force` | No | off | Overwrite existing scaffold files. Without it, init refuses to clobber files. |
@@ -97,7 +97,9 @@ adapters/sms_callbacks/before_model.py
 
 Run `cxas poly validate --app-dir examples/polymorphic_pizza --explain` next,
 then replace the starter instruction/eval/tool/callback content with real
-channel behavior.
+channel behavior. Keep generated `sourceDir` and `pythonCode` references
+project-relative; absolute paths are rejected by validation so adapter cards
+remain portable.
 
 ---
 
@@ -181,7 +183,7 @@ cxas poly validate [--app-dir DIR] [--format text|json] [--strict] [--explain]
 | `AD005` | error | A tool `add` references a tool defined neither in `tools/`, the adapter's `toolDefinitions`, nor a platform tool; or a referenced `pythonCode`/`sourceDir` is missing. |
 | `AD006` | warning | The adapter declares no `evaluations` entries. |
 | `AD007` | error | Two adapter cards target the same `metadata.channel`. |
-| `AD008` | error | A referenced `sourceDir`/`pythonCode` path escapes the project root. |
+| `AD008` | error | A referenced `sourceDir`/`pythonCode` path is absolute or escapes the project root. |
 | `AD009` | error | `deployment` `channelType`/`modality`/`theme` use known, supported values. |
 | `AD010` | error | `toolDefinitions` declare a supported `toolType` (`python`, `openapi`). |
 
