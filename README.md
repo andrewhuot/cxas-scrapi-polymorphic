@@ -180,10 +180,11 @@ it before anything touches the filesystem.
 
 ### `poly/validators.py` — the safety net
 
-Pure, local checks (`AD001`–`AD007`) that run **before** compilation. Each
-returns a list of issue dicts shaped exactly like the linter's results
-(`{rule_id, severity, message, path}`), and the same checks back the `adapters`
-category of `cxas lint`. See [Validation rules](#validation-rules).
+Pure, local checks (`AD001`–`AD010`) that are the single source of truth — they
+run inside `cxas poly validate`, back the `adapters` category of `cxas lint`, and
+are invoked by `compile()` itself **before** any deltas are applied. Each returns
+a list of issue dicts shaped exactly like the linter's results (`{rule_id,
+severity, message, path}`). See [Validation rules](#validation-rules).
 
 ### `poly/engine.py` — the compiler
 
@@ -266,7 +267,7 @@ callbacks:
 evaluations:
   - sourceDir: adapters/voice_evals
 
-# Emit a deployment.json for telephony, voice-only.
+# Channel/modality settings, folded into the compiled gecx-config.json.
 deployment:
   channelType: GOOGLE_TELEPHONY_PLATFORM
   modality: VOICE_ONLY
@@ -324,11 +325,11 @@ tools/
 evaluations/
   + 1 eval(s): Rich_Card_Confirmation
 
-deployment.json
-  + channelType: WEB_UI
+gecx-config.json (deployment)
+  + channel_type: WEB_UI
   + modality: CHAT_ONLY
   + theme: LIGHT
-  + webWidgetTitle: Bella Notte Reservations
+  + web_widget_title: Bella Notte Reservations
 ```
 
 ### 5. Build the channels
@@ -371,11 +372,11 @@ the deep-copied base during compilation.
 |---|---|---|
 | **Instruction diffs** | `instructionDiffs[]` | Edit an agent's instruction text. `mode: append` / `prepend` add text; `mode: replace_section` swaps the contents of an XML-style `<sectionTag>…</sectionTag>` block. |
 | **Tool modifications** | `tools[]` | `add`/`remove` tool names on a named agent's `tools` list. |
-| **Tool definitions** | `toolDefinitions[]` | Bring a channel-only tool into `tools/` from a `sourceDir` (its `<name>.json` + `python_code.py`). Required when a `tools.add` references a tool not in the base. |
+| **Tool definitions** | `toolDefinitions[]` | Bring a channel-only tool into `tools/` from a `sourceDir`. `toolType: python` brings its `<name>.json` + normalized `python_code.py`; `toolType: openapi` copies the source directory verbatim. Required when a `tools.add` references a tool not in the base. |
 | **Model overrides** | `modelOverrides[]` | Set `modelSettings.model` for an agent in this channel. |
 | **Callbacks** | `callbacks[]` | Append a channel-specific callback (`before_model`, `after_model`, `before_tool`, `after_tool`, `before_agent`, `after_agent`). Auto-numbered after any existing ones. |
-| **Evaluations** | `evaluations[]` | Merge a `sourceDir` of channel-specific evaluations into `evaluations/`. |
-| **Deployment** | `deployment` | Emit a `deployment.json` (channel type, modality, web-widget config) and update `gecx-config.json`. |
+| **Evaluations** | `evaluations[]`, `evaluationExpectations[]`, `evaluationDatasets[]` | Merge a `sourceDir` of channel-specific evaluations, expectations, and datasets into the matching output directories. |
+| **Deployment** | `deployment` | Fold a `deployment` block (channel type, modality, web-widget config) into `gecx-config.json` — the file deploy tooling reads — and set `default_channel`/`modality`. |
 
 Two conveniences worth knowing:
 
@@ -390,27 +391,34 @@ Two conveniences worth knowing:
 
 ## The compilation pipeline
 
-`PolymorphismEngine.compile()` applies an adapter in a fixed, deterministic
-order. Understanding the order explains the output:
+`PolymorphismEngine.compile()` first **validates** the card (the same checks as
+`cxas poly validate` — the single source of truth), then applies it in a fixed,
+deterministic order. Understanding the order explains the output:
 
-1. **Deep-copy the base.** Agent configs, instructions, and existing callback
+1. **Validate.** Run the adapter validators; if any error-severity issue is
+   found, raise a `CompilationError` carrying the *full* list — nothing is
+   applied. A validated card always compiles.
+2. **Deep-copy the base.** Agent configs, instructions, and existing callback
    code are copied so the base is never mutated.
-2. **Instruction diffs.** `append` / `prepend` / `replace_section` on each named
-   agent.
-3. **Tool add / remove.** Update each agent's `tools` list (adds are
+3. **Instruction diffs.** `append` / `prepend` / `replace_section` on each named
+   agent (`replace_section` matches `<tag …>…</tag>`, attributes allowed).
+4. **Tool add / remove.** Update each agent's `tools` list (adds are
    de-duplicated; removes are filtered out).
-4. **Tool definitions.** Read each channel-only tool's directory; normalize its
-   code path to the canonical `tools/<name>/python_function/python_code.py`.
-5. **Model overrides.** Set `modelSettings.model` per agent.
-6. **Callbacks.** Append channel callbacks, auto-numbering after existing ones
+5. **Tool definitions.** Read each channel-only tool's directory; `python` tools
+   normalize to `tools/<name>/python_function/python_code.py`, `openapi` tools
+   are copied verbatim.
+6. **Model overrides.** Set `modelSettings.model` per agent.
+7. **Callbacks.** Append channel callbacks, auto-numbering after existing ones
    (e.g. a second `before_model` callback becomes `before_model_callbacks_02`).
-7. **Evaluations.** Merge each channel eval directory.
-8. **Deployment + gecx config.** Build `deployment.json`; set `default_channel`,
-   `app_dir`, and (for voice) `modality` in `gecx-config.json`.
+8. **Evaluations.** Merge each channel eval / expectation / dataset directory.
+9. **Deployment + gecx config.** Fold the `deployment` block into
+   `gecx-config.json`; set `default_channel`, `app_dir`, and (for voice)
+   `modality`.
 
-Errors are **accumulated, not fail-fast**: a missing agent or section is recorded
-as an issue and compilation continues, so a single run surfaces *every* problem
-at once via a `CompilationError` carrying the full issue list.
+Validation surfaces *every* problem at once: all issues are accumulated and, if
+any are errors, raised together as a single `CompilationError` — the engine never
+applies a partial or invalid card. Malformed adapter files are reported as
+`AD001` issues (with the file name), never as a Python traceback.
 
 ---
 
@@ -456,13 +464,16 @@ Run via `cxas poly validate` (or as the `adapters` category of `cxas lint`). The
 
 | ID | Severity | Check |
 |----|----------|-------|
-| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types. |
+| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types (malformed cards report here, not as a traceback). |
 | `AD002` | error | Every agent referenced in `instructionDiffs`, `tools`, `modelOverrides`, `callbacks` exists in `agents/`. |
-| `AD003` | error | `replace_section` diffs set `sectionTag`, and that `<sectionTag>` exists in the target instruction. |
+| `AD003` | error | `replace_section` diffs set `sectionTag`, and a matching `<sectionTag …>…</sectionTag>` block (attributes allowed) exists in the target instruction. |
 | `AD004` | warning | A tool `remove` references a tool not in the base agent's tool list. |
-| `AD005` | error | A tool `add` references a tool defined neither in `tools/` nor in the adapter's `toolDefinitions`. |
+| `AD005` | error | A tool `add` references a tool defined neither in `tools/`, the adapter's `toolDefinitions`, nor a platform tool; or a referenced `pythonCode`/`sourceDir` is missing. |
 | `AD006` | warning | The adapter declares no `evaluations` entries. |
 | `AD007` | error | Two adapter cards target the same `metadata.channel`. |
+| `AD008` | error | A referenced `sourceDir`/`pythonCode` path escapes the project root. |
+| `AD009` | error | `deployment` `channelType`/`modality`/`theme` use known, supported values. |
+| `AD010` | error | `toolDefinitions` declare a supported `toolType` (`python`, `openapi`). |
 
 `cxas poly build --channel all` runs this validation first and writes **nothing**
 if any error-severity issue is found.

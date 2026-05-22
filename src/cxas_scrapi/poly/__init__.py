@@ -15,8 +15,9 @@
 """Polymorphism Engine for cxas-scrapi.
 
 Compiles a single base agent project plus channel adapter cards into
-channel-optimized agent project directories that are byte-for-byte
-indistinguishable from hand-authored projects.
+channel-optimized agent project directories that are structurally equivalent
+to hand-authored projects — indistinguishable to SCRAPI tooling (lint, eval,
+deploy all run on the output unchanged).
 
 This package is intentionally GCP-free — it performs pure local file
 operations and does not import ``google.cloud.*``.
