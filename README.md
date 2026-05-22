@@ -9,6 +9,7 @@
       <a href="https://googlecloudplatform.github.io/cxas-scrapi/stable/">Docs</a>,
       <a href="examples/">Examples</a>,
       <a href="docs/guides/polymorphism.md">Polymorphism Guide</a>,
+      <a href="docs/guides/polymorphism-5-minute-tutorial.md">5-Minute Tutorial</a>,
       <a href="docs/cli/poly.md"><code>cxas poly</code> CLI</a>
     </h3>
 </html>
@@ -29,15 +30,16 @@ complete, channel-optimized project (chat, voice, …) for each target.
 
 1. [The core idea](#the-core-idea)
 2. [Quickstart: the Polymorphic Pizza demo](#quickstart-the-polymorphic-pizza-demo)
-3. [Architecture at a glance](#architecture-at-a-glance)
-4. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
-5. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
-6. [Adapter card reference](#adapter-card-reference)
-7. [The compilation pipeline](#the-compilation-pipeline)
-8. [Driving the engine from Python](#driving-the-engine-from-python)
-9. [Validation rules](#validation-rules)
-10. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
-11. [Where to go next](#where-to-go-next)
+3. [5-minute tutorial: add a new channel](#5-minute-tutorial-add-a-new-channel)
+4. [Architecture at a glance](#architecture-at-a-glance)
+5. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
+6. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
+7. [Adapter card reference](#adapter-card-reference)
+8. [The compilation pipeline](#the-compilation-pipeline)
+9. [Driving the engine from Python](#driving-the-engine-from-python)
+10. [Validation rules](#validation-rules)
+11. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
+12. [Where to go next](#where-to-go-next)
 
 ---
 
@@ -122,6 +124,24 @@ prints the same AD rule IDs with field paths and likely fixes.
 
 Full file-by-file walkthrough, a chat-vs-voice comparison, and what to try next:
 **[examples/polymorphic_pizza/README.md](examples/polymorphic_pizza/README.md)**.
+
+---
+
+## 5-minute tutorial: add a new channel
+
+If you want the shortest path that exercises the new developer workflow end to
+end, follow **[Polymorphism in 5 Minutes](docs/guides/polymorphism-5-minute-tutorial.md)**.
+
+That tutorial walks through:
+
+1. copying a real example app to a scratch directory
+2. scaffolding a new channel with `cxas poly init`
+3. validating it with `cxas poly validate --explain` or `cxas poly doctor`
+4. inspecting the machine-readable delta with `cxas poly diff --json`
+5. building and linting the compiled output
+
+It is the fastest way to understand the first-wave polymorphism DX without
+reading the deeper architecture sections first.
 
 > Prefer a more advanced example with a slot-filling framework? The
 > [step-by-step section below](#using-polymorphism-step-by-step) uses the larger
