@@ -136,6 +136,20 @@ Fix:
 - Use `python` or `openapi`, or change source code before documenting a new
   type
 
+### AD011 — Malformed appIdentity
+
+Cause:
+
+- `appIdentity.name` is set but is not a valid UUID
+- `appIdentity.displayName` is set but blank
+
+Fix:
+
+- Provide a real UUID for `appIdentity.name`, or omit it to let the engine
+  derive a deterministic per-channel id
+- Give `appIdentity.displayName` a non-empty value, or omit it to fall back to
+  the adapter's `metadata.displayName`
+
 ## Common Failure Patterns
 
 ### "No app.json found"
