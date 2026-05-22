@@ -82,6 +82,21 @@ class AdapterMetadata(BaseModel):
     description: str = ""
 
 
+class AppIdentity(BaseModel):
+    """Per-channel overrides for the compiled app's identity.
+
+    Both fields are optional.  When absent, the engine auto-derives a distinct
+    display name (from the adapter's ``metadata.displayName``) and a
+    deterministic per-channel ``name`` so two channels never collide as the
+    same deployed app.
+    """
+
+    model_config = _MODEL_CONFIG
+
+    display_name: Optional[str] = Field(default=None, alias="displayName")
+    name: Optional[str] = None
+
+
 class InstructionDiff(BaseModel):
     """A modification to an agent's instruction text."""
 
@@ -209,6 +224,9 @@ class AdapterCard(BaseModel):
         default_factory=dict, alias="gecxConfig"
     )
     deployment: Optional[DeploymentOverride] = None
+    app_identity: Optional[AppIdentity] = Field(
+        default=None, alias="appIdentity"
+    )
 
 
 class CompiledAgentConfig(BaseModel):
