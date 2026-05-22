@@ -36,11 +36,11 @@ examples/bella_notte/                 cxas poly build         output/
 │   ├── Bella_Notte_Host/                                      │   ├── agents/        (chat instructions)
 │   └── Reservation_Agent/                                     │   ├── tools/         (+ send_rich_card)
 ├── tools/                                                     │   ├── evaluations/   (+ chat evals)
-├── evaluations/                                               │   └── deployment.json (WEB_UI / CHAT_ONLY)
+├── evaluations/                                               │   └── gecx-config.json (deployment: WEB_UI / CHAT_ONLY)
 └── adapters/                                                  └── voice/
     ├── chat.adapter.yaml                                          ├── agents/        (voice instructions)
     └── voice.adapter.yaml                                         ├── tools/         (no chat-only tools)
-                                                                   └── deployment.json (GTP / VOICE_ONLY)
+                                                                   └── gecx-config.json (deployment: GTP / VOICE_ONLY)
 ```
 
 Each adapter applies, in order:
@@ -51,7 +51,7 @@ Each adapter applies, in order:
 4. **Model overrides** — set `modelSettings.model` per agent for the channel.
 5. **Callbacks** — append channel-specific callbacks, auto-numbered after any existing ones (`before_model_callbacks_02`, …).
 6. **Evaluations** — merge channel-specific evaluation directories into `evaluations/`.
-7. **Deployment** — emit a `deployment.json` with channel/modality/widget settings, and update `gecx-config.json`.
+7. **Deployment** — fold a `deployment` block (channel/modality/widget settings) into `gecx-config.json` — the file deploy tooling reads — and set `default_channel`/`modality`.
 
 ---
 

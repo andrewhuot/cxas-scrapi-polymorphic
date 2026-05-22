@@ -42,6 +42,30 @@ CallbackType = Literal[
     "after_agent",
 ]
 
+# Allowed adapter ``deployment`` values.  These mirror the enums in
+# ``cxas_scrapi.core.deployments.Deployments`` (ChannelType / Modality / Theme)
+# but are hardcoded here on purpose: the ``poly`` package stays GCP-free and
+# must not import ``google.cloud.*``.  Keep these lists in sync with that class.
+CHANNEL_TYPES = (
+    "WEB_UI",
+    "API",
+    "TWILIO",
+    "GOOGLE_TELEPHONY_PLATFORM",
+    "CONTACT_CENTER_AS_A_SERVICE",
+    "FIVE9",
+    "CONTACT_CENTER_INTEGRATION",
+)
+MODALITIES = (
+    "CHAT_AND_VOICE",
+    "VOICE_ONLY",
+    "CHAT_ONLY",
+    "CHAT_VOICE_AND_VIDEO",
+)
+THEMES = ("LIGHT", "DARK")
+
+# Tool definition types the engine knows how to compile.
+SUPPORTED_TOOL_TYPES = ("python", "openapi")
+
 
 class AdapterMetadata(BaseModel):
     """Metadata about the channel adapter."""
@@ -170,6 +194,12 @@ class AdapterCard(BaseModel):
     )
     callbacks: List[CallbackDefinition] = Field(default_factory=list)
     evaluations: List[EvalReference] = Field(default_factory=list)
+    evaluation_expectations: List[EvalReference] = Field(
+        default_factory=list, alias="evaluationExpectations"
+    )
+    evaluation_datasets: List[EvalReference] = Field(
+        default_factory=list, alias="evaluationDatasets"
+    )
     deployment: Optional[DeploymentOverride] = None
 
 
@@ -191,10 +221,18 @@ class CompiledAgentConfig(BaseModel):
     agent_instructions: Dict[str, str] = Field(default_factory=dict)
     tools: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     tool_code: Dict[str, str] = Field(default_factory=dict)
+    # Channel tool name -> absolute source directory, for tool types that are
+    # copied verbatim (e.g. ``openapi``) rather than reconstructed from a
+    # single JSON + ``python_code.py``.  In-memory only.
+    tool_source_dirs: Dict[str, str] = Field(default_factory=dict)
     evaluations: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     evaluation_expectations: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict
     )
+    evaluation_datasets: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    # The resolved per-channel deployment block.  Also stored under
+    # ``gecx_config["deployment"]`` (the file deploy tooling reads); kept here
+    # too so callers like ``cxas poly diff`` can introspect it directly.
     deployment: Optional[Dict[str, Any]] = None
     # Callback code keyed by ``(agent, cb_dir_name, cb_index)`` ->
     # python source text.  Written to disk under each agent's standard
