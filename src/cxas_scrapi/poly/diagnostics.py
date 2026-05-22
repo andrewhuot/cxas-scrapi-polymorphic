@@ -209,6 +209,19 @@ RULE_GUIDES: Dict[str, RuleGuide] = {
         ),
         fix="Use toolType: python or toolType: openapi.",
     ),
+    "AD011": RuleGuide(
+        what="The adapter's appIdentity block is malformed.",
+        why=(
+            "Each channel compiles to a distinct deployable app; an explicit "
+            "appIdentity.name must be a real UUID and displayName must be "
+            "non-empty so the override is usable."
+        ),
+        fix=(
+            "Provide a valid UUID for appIdentity.name (or omit it to let the "
+            "engine derive one), and give appIdentity.displayName a non-empty "
+            "value or remove it."
+        ),
+    ),
 }
 
 

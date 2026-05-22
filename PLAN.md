@@ -1,166 +1,131 @@
 # PLAN.md
 
 ## Goal
-Review the polymorphism implementation holistically, polish code and
-documentation, and leave the feature ready to share.
+Review the current SCRAPI polymorphic-agent implementation against
+`/Users/andrew/Downloads/Polymorphic_Agent_Architecture_Product_Proposal.md`,
+identify gaps between the implementation and the PRD promises, select a narrow
+set of high-leverage improvements, implement and verify them, and prepare a PR
+with meaningful product progress.
 
 ## Context
-- Current workspace: `/Users/andrew/.codex/worktrees/1030/cxas-scrapi-polymorphic`
-- Current git state: detached `HEAD` worktree; do not fetch, pull, push, or
-  deploy.
-- Polymorphism is build-time only. The maintained source is a direct SCRAPI app
-  plus `adapters/*.adapter.yaml`; compiled channel outputs are generated
-  artifacts.
-- Core implementation:
+- Repo root: `/Users/andrew/.codex/worktrees/c72c/cxas-scrapi-polymorphic`
+- Current git state: detached `HEAD`, clean at start.
+- PRD: `/Users/andrew/Downloads/Polymorphic_Agent_Architecture_Product_Proposal.md`
+- Relevant implementation:
   - `src/cxas_scrapi/poly/models.py`
   - `src/cxas_scrapi/poly/validators.py`
   - `src/cxas_scrapi/poly/engine.py`
-  - `src/cxas_scrapi/poly/instructions.py`
-  - `src/cxas_scrapi/poly/scaffold.py`
-  - `src/cxas_scrapi/poly/diagnostics.py`
   - `src/cxas_scrapi/poly/diffing.py`
+  - `src/cxas_scrapi/poly/diagnostics.py`
+  - `src/cxas_scrapi/poly/scaffold.py`
   - `src/cxas_scrapi/cli/poly_cli.py`
   - `src/cxas_scrapi/utils/lint_rules/adapters.py`
-- Docs and examples to audit:
+- Relevant docs and examples:
   - `README.md`
-  - `docs/guides/polymorphism.md`
-  - `docs/guides/polymorphism-5-minute-tutorial.md`
-  - `docs/patterns/polymorphism.md`
   - `docs/cli/poly.md`
-  - `examples/polymorphic_pizza/**`
+  - `docs/guides/polymorphism.md`
+  - `docs/patterns/polymorphism.md`
   - `examples/bella_notte/**`
-  - `.agents/skills/cxas-polymorphic-adapters/SKILL.md`
-- Existing polymorphism tests:
-  - `tests/cxas_scrapi/poly/test_models.py`
-  - `tests/cxas_scrapi/poly/test_validators.py`
-  - `tests/cxas_scrapi/poly/test_engine.py`
-  - `tests/cxas_scrapi/poly/test_hardening.py`
-  - `tests/cxas_scrapi/poly/test_adapter_lint_rules.py`
-  - `tests/cxas_scrapi/poly/test_scaffold.py`
-  - `tests/cxas_scrapi/poly/test_diagnostics.py`
-  - `tests/cxas_scrapi/poly/test_diffing.py`
-  - `tests/cxas_scrapi/poly/test_poly_cli.py`
+  - `examples/polymorphic_pizza/**`
+- Relevant tests:
+  - `tests/cxas_scrapi/poly/**`
 
 ## Constraints
-- Preserve current public behavior unless a review finding justifies a change.
-- Do not invent adapter fields, runtime polymorphism, channels, tool types, or
-  deployment enum values unsupported by the current schema.
-- Behavior changes require tests that fail first, then minimal implementation.
-- Documentation-only polish may be edited directly, but must stay aligned with
-  current code and examples.
-- Keep changes small, local, and reviewable. Avoid unrelated refactors or
-  generated-output churn.
-- Do not hand-edit compiled output directories; rebuild from source adapters.
+- Preserve the repo's existing contract: polymorphism is build-time only, and
+  compiled output must remain an ordinary SCRAPI project.
+- Do not invent unsupported adapter card fields unless intentionally extending
+  the schema with tests, validation, engine behavior, and docs.
+- Do not hand-edit compiled output directories; rebuild from base projects plus
+  adapter cards.
+- Do not fetch, push, or deploy until the implementation is ready and the PR
+  publishing step requires it.
+- Use small, additive, testable changes. Avoid unrelated refactors and metadata
+  churn.
+- Every behavior change needs focused tests.
 
 ## Milestones
 
-### Milestone 1 — Understand And De-Risk
-Read the polymorphism code, CLI, linter bridge, docs, examples, and tests.
-Identify correctness, security, maintainability, documentation, and shareability
-gaps before editing implementation files.
+### Milestone 1 - PRD Gap Review
+Extract the PRD's concrete promises, map them to current code/docs/examples,
+and record gaps by severity and launch value in `findings.md`.
 
-### Milestone 2 — Baseline Verification
-Run targeted tests and real example commands to distinguish existing failures
-from review findings:
-- `git diff --check`
-- `uv run --with-editable . --with alive-progress pytest tests/cxas_scrapi/poly -q`
-- `uv run --with-editable . --with alive-progress ruff check src/cxas_scrapi/poly src/cxas_scrapi/cli/poly_cli.py tests/cxas_scrapi/poly`
-- `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/polymorphic_pizza`
-- `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte`
-- `uv run --with-editable . --with alive-progress cxas poly doctor --app-dir examples/bella_notte`
-- `uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte --json`
-- `uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_readiness_build`
-- `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_readiness_build/chat`
-- `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_readiness_build/voice`
+### Milestone 2 - Improvement Selection And Design
+Choose a bounded improvement set that materially advances V1 launch readiness,
+state the reasoning and trade-offs, and update this plan with exact files and
+verification commands.
 
-### Milestone 3 — Polish Implementation
-For each confirmed implementation issue, write a focused failing test first,
-verify the failure, implement the minimal fix, and rerun the relevant tests.
-Likely focus areas are path safety, validation consistency, CLI error handling,
-diff stability, scaffold output, and linter parity.
+Selected slice: add `cxas poly readiness`, a pre-launch design-partner report
+that composes current validation, adapter diff summaries, eval coverage,
+duplicate eval-name detection, and compileability into one human/JSON surface.
+This fills the PRD gap around launch evidence and workflow ergonomics without
+changing the build-time-only adapter contract.
 
-### Milestone 4 — Polish Documentation And Examples
-Tighten docs/examples/skill guidance so a new developer can understand the
-build-time model, author an adapter, validate/debug it, inspect diffs, build
-outputs, and lint compiled projects without relying on hidden context.
+### Milestone 3 - Implementation
+Implement the selected improvements in the smallest coherent slice, including
+tests and docs/examples where behavior or workflow changes.
 
-### Milestone 5 — Final Verification And Readiness Summary
-Run the verification commands, inspect the final diff, update this plan with
-completed work and any remaining risks, and summarize whether the feature is
-ready to share.
+### Milestone 4 - Verification
+Run targeted unit tests, CLI smoke checks against the examples, and diff
+cleanliness checks. Record all results in `progress.md`.
+
+### Milestone 5 - Branch, Commit, And PR
+Create/switch to a `codex/` branch, commit one logical change using Conventional
+Commits, push, and open a PR with the gap analysis and verification summary.
 
 ## Verification Commands
-Run from the repo root.
+Initial expected commands from the repo root; update after Milestone 2 if the
+selected improvement changes the surface area.
 
 ```bash
 git diff --check
 uv run --with-editable . --with alive-progress ruff check src/cxas_scrapi/poly src/cxas_scrapi/cli/poly_cli.py tests/cxas_scrapi/poly
 uv run --with-editable . --with alive-progress pytest tests/cxas_scrapi/poly -q
-uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/polymorphic_pizza
 uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte
 uv run --with-editable . --with alive-progress cxas poly doctor --app-dir examples/bella_notte
-uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte --explain
-uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte
 uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte --json
-rm -rf /tmp/poly_readiness_build
-uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_readiness_build
-uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_readiness_build/chat
-uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_readiness_build/voice
+uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_prd_alignment_build
+uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd_alignment_build/chat
+uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd_alignment_build/voice
 ```
 
 ## Acceptance Criteria
-- Review findings are either fixed, explicitly documented as accepted residual
-  risk, or proven not to be issues.
-- Adapter validation remains the shared source of truth for `cxas poly
-  validate`, `cxas poly build`, and the `adapters` lint category.
-- `cxas poly init`, `doctor`, `validate --explain`, `diff --json`, and `build`
-  behave predictably on the shipped examples.
-- Docs and examples match the implemented schema and command behavior.
-- Targeted polymorphism tests, lint checks, real example validation, diff,
-  build, and compiled-output lint commands pass.
+- `findings.md` contains a concrete PRD-to-implementation gap matrix.
+- The implemented slice addresses one or more high-value V1 launch gaps rather
+  than cosmetic cleanup.
+- Tests cover the changed behavior and describe user-visible outcomes.
+- Docs/examples explain the improved workflow accurately.
+- Targeted verification commands pass or any remaining failures are documented
+  with a clear reason.
+- A PR exists with a concise summary, gap rationale, and verification evidence.
 
 ## Progress
-- [x] Milestone 1 plan refreshed
-- [x] Milestone 1 review complete
-- [x] Milestone 2 baseline verification complete
-- [x] Milestone 3 implementation polish complete
-- [x] Milestone 4 docs/examples polish complete
-- [x] Milestone 5 final verification complete
+- [x] Milestone 1 complete
+- [x] Milestone 2 complete
+- [x] Milestone 3 complete
+- [x] Milestone 4 complete
+- [x] Milestone 5 complete
 
 ## Decision Log
-- 2026-05-22 03:15 — Treat this pass as a readiness review, not a feature
-  expansion. The bar is correctness, consistency, docs clarity, and example
-  health.
-- 2026-05-22 03:15 — Keep adapter validation as the source of truth. Any CLI or
-  linter polish should reuse validator behavior rather than forking rules.
-- 2026-05-22 03:35 — Reject absolute adapter `sourceDir`/`pythonCode` paths even
-  when they point inside the current app root. Adapter cards should be portable
-  project-relative source, not machine-local manifests.
-- 2026-05-22 03:35 — Make `cxas poly init --with-callback` generate hook-specific
-  typed callback stubs for all supported callback hooks, matching the callback
-  linter contract from the first scaffolded file.
+- 2026-05-22 01:55 - Treat the PRD as the primary source of truth for launch
+  promises and select an implementation slice only after mapping those promises
+  to current code, docs, examples, and tests.
+- 2026-05-22 02:03 - Select a readiness report over deeper schema expansion:
+  the schema/compiler already cover V1 primitives, while the PRD's design
+  partner launch plan lacks a single artifact that proves validation, coverage,
+  auditability, and compileability before build/deploy.
 
 ## Notes / Blockers
-- Review findings fixed:
-  - `cxas poly init --with-callback` now generates the correct entry function,
-    argument list, and return annotation for each supported callback hook.
-  - Adapter validation now reports `AD008` for absolute paths as well as `..`
-    escapes, keeping adapter cards project-relative and portable.
-  - Docs, examples, and the repo-local polymorphism skill now describe those
-    contracts consistently.
 - Verification completed:
   - `git diff --check`
   - `uv run --with-editable . --with alive-progress ruff check src/cxas_scrapi/poly src/cxas_scrapi/cli/poly_cli.py tests/cxas_scrapi/poly`
-  - `uv run --with-editable . --with alive-progress pytest tests/cxas_scrapi/poly -q` (87 passed, 1 existing pytest config warning)
-  - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/polymorphic_pizza`
+  - `uv run --with-editable . --with alive-progress pytest tests/cxas_scrapi/poly -q` (89 passed, 1 existing pytest config warning)
+  - `uv run --with-editable . --with alive-progress cxas poly readiness --app-dir examples/bella_notte`
+  - `uv run --with-editable . --with alive-progress cxas poly readiness --app-dir examples/bella_notte --format json`
   - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte`
   - `uv run --with-editable . --with alive-progress cxas poly doctor --app-dir examples/bella_notte`
-  - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte --explain`
-  - `uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte`
   - `uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte --json`
-  - `uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_readiness_build`
-  - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_readiness_build/chat`
-  - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_readiness_build/voice`
-  - `uv run --with-editable . --with alive-progress cxas poly init --app-dir /tmp/poly_init_callbacks_smoke --channel sms --deployment-target TWILIO --modality VOICE_ONLY --with-callback before_model --with-callback after_model --with-callback before_agent --with-callback after_agent --with-callback before_tool --with-callback after_tool`
-  - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir /tmp/poly_init_callbacks_smoke` (0 errors, 1 pre-existing fixture warning from the original voice adapter)
+  - `uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_prd_alignment_build_c72c_readiness_20260522`
+  - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd_alignment_build_c72c_readiness_20260522/chat`
+  - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd_alignment_build_c72c_readiness_20260522/voice`
 - No blockers.
+- Draft PR: https://github.com/andrewhuot/cxas-scrapi-polymorphic/pull/7

@@ -36,9 +36,11 @@ collide with the existing ``config`` lint rules, so adapter rules use the
     AD008  a referenced path is absolute or escapes the project root
     AD009  deployment channelType/modality/theme is a known value
     AD010  toolDefinitions.toolType is supported
+    AD011  appIdentity well-formed (name a valid UUID; displayName non-empty)
 """
 
 import json
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -397,6 +399,25 @@ def validate_adapter_card(
                     ERROR,
                     f"deployment.webWidgetConfig.modality '{wwc.modality}' is "
                     f"not one of {', '.join(MODALITIES)}",
+                )
+
+    # AD011 — appIdentity is well-formed when present.
+    ident = adapter.app_identity
+    if ident is not None:
+        if ident.display_name is not None and not ident.display_name.strip():
+            add(
+                "AD011",
+                ERROR,
+                "appIdentity.displayName must be non-empty when set.",
+            )
+        if ident.name is not None:
+            try:
+                uuid.UUID(str(ident.name))
+            except (ValueError, AttributeError, TypeError):
+                add(
+                    "AD011",
+                    ERROR,
+                    f"appIdentity.name '{ident.name}' is not a valid UUID.",
                 )
 
     # AD006 — adapter has no evaluations.

@@ -30,6 +30,7 @@ from cxas_scrapi.poly.engine import (
 from cxas_scrapi.poly.models import (
     AdapterCard,
     AdapterMetadata,
+    AppIdentity,
     CallbackDefinition,
     CompiledAgentConfig,
     DeploymentOverride,
@@ -44,6 +45,7 @@ from cxas_scrapi.poly.models import (
 __all__ = [
     "AdapterCard",
     "AdapterMetadata",
+    "AppIdentity",
     "CallbackDefinition",
     "CompilationError",
     "CompiledAgentConfig",

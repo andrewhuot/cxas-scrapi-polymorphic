@@ -28,7 +28,7 @@ Use this skill when the user mentions:
 - `cxas poly`, `cxas poly build`, `cxas poly validate`, or `cxas poly diff`
 - Making one base agent work across chat, voice, API, or telephony channels
 - Writing or editing `adapters/*.adapter.yaml` files
-- `AD001`-`AD010` validation errors
+- `AD001`-`AD011` validation errors
 - Comparing or inspecting compiled channel output
 
 Do not use this skill for:
@@ -122,6 +122,7 @@ Optional delta sections, applied in this fixed order during compilation:
 | Evaluations | `evaluations[]` | Merge channel eval directories into compiled `evaluations/` |
 | Expectations / datasets | `evaluationExpectations[]`, `evaluationDatasets[]` | Merge channel expectation and dataset dirs |
 | Deployment | `deployment` | Fold channel/modality/widget config into compiled `gecx-config.json` |
+| App identity | `appIdentity` | Override the compiled app's `displayName`/`name`. Optional — defaults to the adapter's `metadata.displayName` and a deterministic per-channel UUID so channels never collide as one deployed app |
 
 Supported values to keep handy:
 
@@ -161,6 +162,7 @@ These are the same rule IDs surfaced by `cxas poly validate`, `cxas lint`, and
 - `AD008`: path is absolute or escapes the app root
 - `AD009`: unsupported deployment enum value
 - `AD010`: unsupported `toolType`
+- `AD011`: malformed `appIdentity` (name not a valid UUID, or empty displayName)
 
 Load `references/debug-adapter.md` for cause and fix guidance.
 

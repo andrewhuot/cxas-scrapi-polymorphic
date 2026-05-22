@@ -295,3 +295,22 @@ def test_replace_section_with_attributes(copied_base: Path):
     text = compiled.agent_instructions["Test_Agent"]
     assert "new voice text" in text
     assert "Default channel behavior here." not in text
+
+
+def test_provenance_marker_is_enriched(
+    tmp_path: Path, polymorphic_pizza_dir: Path
+):
+    eng = PolymorphismEngine(str(polymorphic_pizza_dir))
+    eng.load_base_project()
+    compiled = eng.compile_all()
+    out = eng.write_output(compiled["chat"], str(tmp_path / "chat"))
+
+    marker = json.loads((out / ".poly_build.json").read_text())
+    assert marker["channel"] == "chat"
+    assert marker["adapter_card"].endswith("chat.adapter.yaml")
+    assert len(marker["adapter_sha256"]) == 64
+    assert "Order_Agent" in marker["base_agents"]
+    assert marker["base_agents"] == sorted(marker["base_agents"])
+    assert marker["applied_deltas"]["tools_added"] == 1
+    assert marker["applied_deltas"]["deployment"] is True
+    assert isinstance(marker["engine_version"], str)

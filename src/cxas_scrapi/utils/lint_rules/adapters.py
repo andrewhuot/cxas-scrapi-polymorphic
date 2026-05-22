@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Channel adapter card lint rules (AD001-AD010).
+"""Channel adapter card lint rules (AD001-AD011).
 
 Fires when the linter discovers an ``adapters/`` directory containing
 ``*.adapter.{yaml,yml,json}`` files.  These rules reuse the validation
@@ -238,4 +238,14 @@ class AdapterToolType(_AdapterRule):
     id = "AD010"
     name = "adapter-tooltype-supported"
     description = "toolDefinitions declare a supported toolType"
+    default_severity = Severity.ERROR
+
+
+@rule("adapters")
+class AdapterAppIdentityValid(_AdapterRule):
+    id = "AD011"
+    name = "adapter-app-identity-valid"
+    description = (
+        "appIdentity.name is a valid UUID and displayName is non-empty when set"
+    )
     default_severity = Severity.ERROR

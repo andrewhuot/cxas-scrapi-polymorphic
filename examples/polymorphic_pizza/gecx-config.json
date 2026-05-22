@@ -3,8 +3,8 @@
   "location": "<YOUR_GCP_REGION>",
   "app_name": "polymorphic-pizza",
   "deployed_app_id": "<YOUR_DEPLOYED_APP_ID>",
-  "app_dir": "cxas_app/Polymorphic_Pizza/",
+  "app_dir": ".",
   "model": "gemini-3-flash",
   "modality": "text",
-  "default_channel": "text"
+  "default_channel": "chat"
 }

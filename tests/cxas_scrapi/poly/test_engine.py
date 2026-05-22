@@ -379,3 +379,35 @@ def test_write_output_voice_excludes_removed_tool_from_list(
         (out / "agents" / "Test_Agent" / "Test_Agent.json").read_text()
     )
     assert "test_tool" not in cfg["tools"]
+
+
+def test_app_identity_distinct_per_channel(polymorphic_pizza_dir: Path):
+    engine = PolymorphismEngine(str(polymorphic_pizza_dir))
+    engine.load_base_project()
+    compiled = engine.compile_all()
+
+    chat_app = compiled["chat"].app_config
+    voice_app = compiled["voice"].app_config
+
+    assert chat_app["displayName"] != voice_app["displayName"]
+    assert "Chat" in chat_app["displayName"]
+    assert "Voice" in voice_app["displayName"]
+    assert chat_app["name"] != voice_app["name"]
+
+
+def test_app_identity_name_is_deterministic(polymorphic_pizza_dir: Path):
+    def name_for(channel: str) -> str:
+        engine = PolymorphismEngine(str(polymorphic_pizza_dir))
+        engine.load_base_project()
+        return engine.compile_all()[channel].app_config["name"]
+
+    assert name_for("chat") == name_for("chat")
+
+
+def test_app_identity_explicit_override_wins(
+    copied_pizza_with_identity: Path,
+):
+    engine = PolymorphismEngine(str(copied_pizza_with_identity))
+    engine.load_base_project()
+    compiled = engine.compile_all()
+    assert compiled["chat"].app_config["displayName"] == "Override Chat Name"

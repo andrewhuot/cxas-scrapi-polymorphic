@@ -150,3 +150,22 @@ def test_gecx_config_overlay_parses_as_delta():
     card = AdapterCard.model_validate(data)
     assert card.gecx_config["model"] == "gemini-3-pro"
     assert card.gecx_config["runtime"]["turnTimeoutMs"] == 800
+
+
+def test_app_identity_parses_camelcase():
+    data = _valid_card_dict()
+    data["appIdentity"] = {
+        "displayName": "X — Chat",
+        "name": "f6e9c2a1-0000-5000-8000-000000000000",
+    }
+    card = AdapterCard.model_validate(data)
+    assert card.app_identity is not None
+    assert card.app_identity.display_name == "X — Chat"
+    assert card.app_identity.name == "f6e9c2a1-0000-5000-8000-000000000000"
+
+
+def test_app_identity_rejects_unknown_field():
+    data = _valid_card_dict()
+    data["appIdentity"] = {"bogus": 1}
+    with pytest.raises(ValidationError):
+        AdapterCard.model_validate(data)

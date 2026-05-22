@@ -276,3 +276,26 @@ def test_replace_section_with_attributes_passes(copied_base: Path):
     )
     issues = validate_adapter_card(card, str(copied_base))
     assert "AD003" not in _ids(issues)
+
+
+def test_ad011_bad_uuid_name(base_dir: Path):
+    card = _card(appIdentity={"name": "not-a-uuid"})
+    issues = validate_adapter_card(card, str(base_dir))
+    assert "AD011" in _ids(issues)
+
+
+def test_ad011_empty_display_name(base_dir: Path):
+    card = _card(appIdentity={"displayName": "   "})
+    issues = validate_adapter_card(card, str(base_dir))
+    assert "AD011" in _ids(issues)
+
+
+def test_ad011_valid_identity_clean(base_dir: Path):
+    card = _card(
+        appIdentity={
+            "displayName": "X — Chat",
+            "name": "f6e9c2a1-0000-5000-8000-000000000000",
+        }
+    )
+    issues = validate_adapter_card(card, str(base_dir))
+    assert "AD011" not in _ids(issues)

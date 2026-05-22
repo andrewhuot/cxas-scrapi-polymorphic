@@ -6,8 +6,6 @@ title: Guides
 
 These guides walk you through SCRAPI's major workflows in depth. Whether you're building your first agent, setting up evaluations, or integrating AI skills into your development process, you'll find step-by-step guidance here.
 
-If you want the fastest end-to-end taste of polymorphism, start with **[Polymorphism in 5 Minutes](polymorphism-5-minute-tutorial.md)**.
-
 ## Where to Start
 
 If you're new to SCRAPI, we recommend working through these guides in order:

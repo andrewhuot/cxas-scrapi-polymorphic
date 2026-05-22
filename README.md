@@ -9,7 +9,6 @@
       <a href="https://googlecloudplatform.github.io/cxas-scrapi/stable/">Docs</a>,
       <a href="examples/">Examples</a>,
       <a href="docs/guides/polymorphism.md">Polymorphism Guide</a>,
-      <a href="docs/guides/polymorphism-5-minute-tutorial.md">5-Minute Tutorial</a>,
       <a href="docs/cli/poly.md"><code>cxas poly</code> CLI</a>
     </h3>
 </html>
@@ -30,16 +29,15 @@ complete, channel-optimized project (chat, voice, …) for each target.
 
 1. [The core idea](#the-core-idea)
 2. [Quickstart: the Polymorphic Pizza demo](#quickstart-the-polymorphic-pizza-demo)
-3. [5-minute tutorial: add a new channel](#5-minute-tutorial-add-a-new-channel)
-4. [Architecture at a glance](#architecture-at-a-glance)
-5. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
-6. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
-7. [Adapter card reference](#adapter-card-reference)
-8. [The compilation pipeline](#the-compilation-pipeline)
-9. [Driving the engine from Python](#driving-the-engine-from-python)
-10. [Validation rules](#validation-rules)
-11. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
-12. [Where to go next](#where-to-go-next)
+3. [Architecture at a glance](#architecture-at-a-glance)
+4. [Inside the polymorphism engine](#inside-the-polymorphism-engine)
+5. [Using polymorphism, step by step](#using-polymorphism-step-by-step)
+6. [Adapter card reference](#adapter-card-reference)
+7. [The compilation pipeline](#the-compilation-pipeline)
+8. [Driving the engine from Python](#driving-the-engine-from-python)
+9. [Validation rules](#validation-rules)
+10. [When to use adapters vs. separate agents](#when-to-use-adapters-vs-separate-agents)
+11. [Where to go next](#where-to-go-next)
 
 ---
 
@@ -106,10 +104,13 @@ uv run cxas poly validate --app-dir examples/polymorphic_pizza
 uv run cxas poly diff chat --app-dir examples/polymorphic_pizza
 uv run cxas poly diff chat --app-dir examples/polymorphic_pizza --json
 
-# 4. Compile the base project into a chat agent and a voice agent:
+# 4. Check pre-build launch readiness:
+uv run cxas poly readiness --app-dir examples/polymorphic_pizza
+
+# 5. Compile the base project into a chat agent and a voice agent:
 uv run cxas poly build --app-dir examples/polymorphic_pizza --output-dir ./output
 
-# 5. The output is just a normal project — lint it like any other:
+# 6. The output is just a normal project — lint it like any other:
 uv run cxas lint --app-dir ./output/chat
 uv run cxas lint --app-dir ./output/voice
 ```
@@ -125,24 +126,6 @@ prints the same AD rule IDs with field paths and likely fixes.
 Full file-by-file walkthrough, a chat-vs-voice comparison, and what to try next:
 **[examples/polymorphic_pizza/README.md](examples/polymorphic_pizza/README.md)**.
 
----
-
-## 5-minute tutorial: add a new channel
-
-If you want the shortest path that exercises the new developer workflow end to
-end, follow **[Polymorphism in 5 Minutes](docs/guides/polymorphism-5-minute-tutorial.md)**.
-
-That tutorial walks through:
-
-1. copying a real example app to a scratch directory
-2. scaffolding a new channel with `cxas poly init`
-3. validating it with `cxas poly validate --explain` or `cxas poly doctor`
-4. inspecting the machine-readable delta with `cxas poly diff --json`
-5. building and linting the compiled output
-
-It is the fastest way to understand the first-wave polymorphism DX without
-reading the deeper architecture sections first.
-
 > Prefer a more advanced example with a slot-filling framework? The
 > [step-by-step section below](#using-polymorphism-step-by-step) uses the larger
 > Bella Notte project.
@@ -157,8 +140,8 @@ The library is organized by responsibility. Each top-level package under
 | Package | Responsibility |
 |---|---|
 | [`core/`](src/cxas_scrapi/core) | High-level building blocks mapped to CXAS resource types — `Apps`, `Agents`, `Tools`, `Guardrails`, `Deployments`, `Sessions`, etc. The main public SDK surface. |
-| [`poly/`](src/cxas_scrapi/poly) | **The polymorphism engine** — adapter-card models, validators, and the compiler. Pure local file I/O; intentionally **GCP-free** (no `google.cloud.*` imports, no network). |
-| [`cli/`](src/cxas_scrapi/cli) | The `cxas` command line. `cli/poly_cli.py` wires up `cxas poly init / build / validate / doctor / diff`. |
+| [`poly/`](src/cxas_scrapi/poly) | **The polymorphism engine** — adapter-card models, validators, compiler, diffing, diagnostics, scaffolding, and readiness reports. Pure local file I/O; intentionally **GCP-free** (no `google.cloud.*` imports, no network). |
+| [`cli/`](src/cxas_scrapi/cli) | The `cxas` command line. `cli/poly_cli.py` wires up `cxas poly init / build / validate / doctor / readiness / diff`. |
 | [`evals/`](src/cxas_scrapi/evals) | Executing and analyzing agent evaluations — goldens, simulations, latency. |
 | [`utils/`](src/cxas_scrapi/utils) | Pagination, proto/response flattening, linting, Sheets/GCS integrations. |
 | [`migration/`](src/cxas_scrapi/migration) | Tools for migrating legacy Dialogflow CX agents into CXAS. |
@@ -179,8 +162,9 @@ cli/poly_cli.py ──► poly/engine.py ──► poly/models.py
 
 ## Inside the polymorphism engine
 
-The `poly/` package is three small files. Reading them top to bottom is the
-fastest way to understand the whole feature:
+The `poly/` package is organized around small, local modules. Reading the
+schema, validators, compiler, and readiness report top to bottom is the fastest
+way to understand the whole feature:
 
 ### `poly/models.py` — the schema
 
@@ -230,6 +214,14 @@ phases:
    directory: untouched base files are copied verbatim; agents, `app.json`, and
    `gecx-config.json` are reconstructed; channel-only tools/evals/deployment are
    added.
+
+### `poly/readiness.py` — the launch review
+
+`build_readiness_report()` composes validation, compileability, diff summaries,
+and eval coverage into a `poly-readiness/v1` report. It is the design-partner
+review surface: run `cxas poly readiness` before `build` when you want to know
+which channels are ready, which need attention, and whether channel eval names
+would shadow base evals in compiled output.
 
 ---
 
@@ -397,7 +389,21 @@ gecx-config.json (deployment)
   + web_widget_title: Bella Notte Reservations
 ```
 
-### 6. Build the channels
+### 6. Check launch readiness
+
+Before writing compiled output, run the pre-build readiness report:
+
+```bash
+cxas poly readiness --app-dir examples/bella_notte
+cxas poly readiness --app-dir examples/bella_notte --format json
+```
+
+`readiness` gives you one launch-review artifact: validation issues,
+compileability, the diff summary, base/channel eval counts, duplicate eval names
+that would shadow base evals in compiled output, and concrete next steps. Use
+`--strict` in CI when warning-level gaps should block launch.
+
+### 7. Build the channels
 
 ```bash
 cxas poly build --app-dir examples/bella_notte --output-dir ./output
@@ -410,7 +416,7 @@ Compiled channel 'voice' -> ./output/voice
 Done. 2 channel(s) written to ./output
 ```
 
-### 7. Lint, evaluate, and deploy — the output is "just a project"
+### 8. Lint, evaluate, and deploy — the output is "just a project"
 
 The single most important property of the engine: **the compiled output is
 indistinguishable from a hand-authored project.** Every existing command works on
@@ -578,7 +584,7 @@ sections, the channels probably want to be separate agents.
 - **[Polymorphism pattern](docs/patterns/polymorphism.md)** — a full Bella Notte
   chat-vs-voice walkthrough.
 - **[`cxas poly` CLI reference](docs/cli/poly.md)** — every flag for `build`,
-  `validate`, and `diff`.
+  `validate`, `doctor`, `readiness`, and `diff`.
 - **[Examples](examples/)** — the runnable Bella Notte project and its adapters.
 - **[Official docs](https://googlecloudplatform.github.io/cxas-scrapi/stable/)**
   — install, authentication, and the full core SDK.
