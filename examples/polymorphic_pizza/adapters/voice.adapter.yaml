@@ -34,6 +34,16 @@ instructionDiffs:
       and state the total in spoken dollars before placing it.
       </channel_voice>
 
+# Voice prioritizes low-latency turns over maximum response depth.
+modelOverrides:
+  - agent: Order_Agent
+    model: gemini-3-flash
+
+# Channel-specific runtime defaults folded into the compiled gecx-config.json.
+gecxConfig:
+  model: gemini-3-flash
+  modality: audio
+
 # Inject pacing hints before the model call.
 callbacks:
   - agent: Order_Agent

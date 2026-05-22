@@ -125,3 +125,28 @@ def test_populate_by_name_accepts_snake_case():
     )
     assert card.api_version == "v1"
     assert card.metadata.display_name == "C"
+
+
+def test_unknown_adapter_fields_raise():
+    data = _valid_card_dict()
+    data["gecxCongif"] = {"modality": "audio"}
+    with pytest.raises(ValidationError):
+        AdapterCard.model_validate(data)
+
+
+def test_unknown_nested_adapter_fields_raise():
+    data = _valid_card_dict()
+    data["deployment"]["webWidgetConfig"]["webWidgitTitle"] = "Typo"
+    with pytest.raises(ValidationError):
+        AdapterCard.model_validate(data)
+
+
+def test_gecx_config_overlay_parses_as_delta():
+    data = _valid_card_dict()
+    data["gecxConfig"] = {
+        "model": "gemini-3-pro",
+        "runtime": {"turnTimeoutMs": 800},
+    }
+    card = AdapterCard.model_validate(data)
+    assert card.gecx_config["model"] == "gemini-3-pro"
+    assert card.gecx_config["runtime"]["turnTimeoutMs"] == 800

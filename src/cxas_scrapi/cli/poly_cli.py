@@ -81,7 +81,7 @@ def _load_engine(app_dir: str) -> PolymorphismEngine:
 
 def _all_issues(engine: PolymorphismEngine, app_dir: str) -> List[dict]:
     """Parse errors plus validation issues for every loaded adapter."""
-    cards = [c for c, _ in engine.adapters.values()]
+    cards = [c for c, _ in engine.adapter_cards]
     return list(engine.adapter_errors) + validate_all_adapters(cards, app_dir)
 
 
@@ -110,8 +110,8 @@ def poly_build(args: argparse.Namespace) -> None:
 
     # Decide which channels to build and gather issues to gate on.
     if channel == "all":
-        targets = list(engine.adapters.values())
         issues = _all_issues(engine, app_dir)
+        targets = list(engine.adapter_cards)
     else:
         if channel not in engine.adapters:
             console.print(
@@ -124,6 +124,12 @@ def poly_build(args: argparse.Namespace) -> None:
         card, path = engine.adapters[channel]
         targets = [(card, path)]
         issues = validate_adapter_card(card, app_dir)
+        issues.extend(
+            i
+            for i in _all_issues(engine, app_dir)
+            if i.get("rule_id") == "AD007"
+            and f"'{channel}'" in i.get("message", "")
+        )
 
     errors, warnings = _counts(issues)
     if issues:
@@ -240,6 +246,16 @@ def poly_diff(args: argparse.Namespace) -> None:
             _print_issues(engine.adapter_errors)
         sys.exit(1)
     card, card_path = entry
+    duplicate_issues = [
+        i
+        for i in _all_issues(engine, app_dir)
+        if i.get("rule_id") == "AD007"
+        and f"'{channel}'" in i.get("message", "")
+    ]
+    if duplicate_issues:
+        console.print("[red]Error:[/red] duplicate adapter channel:")
+        _print_issues(duplicate_issues)
+        sys.exit(1)
 
     try:
         compiled = engine.compile(card, card_path)
@@ -351,6 +367,11 @@ def poly_diff(args: argparse.Namespace) -> None:
             )
 
     # Deployment (folded into gecx-config.json).
+    if card.gecx_config:
+        console.print("\n[bold cyan]gecx-config.json (channel config)[/bold cyan]")
+        for k, v in sorted(card.gecx_config.items()):
+            console.print(f"  [green]~ {k}: {v}[/green]")
+
     if compiled.deployment:
         console.print("\n[bold cyan]gecx-config.json (deployment)[/bold cyan]")
         for k, v in compiled.deployment.items():

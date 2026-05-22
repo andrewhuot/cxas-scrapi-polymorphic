@@ -219,6 +219,34 @@ def test_deployment_voice_sets_audio_modality(base_dir: Path):
     assert compiled.gecx_config["modality"] == "audio"
 
 
+def test_gecx_config_overlay_deep_merges_before_channel_defaults(copied_base: Path):
+    card = AdapterCard.model_validate(
+        {
+            "apiVersion": "v1",
+            "kind": "ChannelAdapter",
+            "metadata": {"channel": "voice", "displayName": "Voice"},
+            "gecxConfig": {
+                "model": "gemini-3-flash-lite",
+                "default_channel": "wrong",
+                "runtime": {"turnTimeoutMs": 800},
+            },
+            "evaluations": [{"sourceDir": "adapters/chat_evals"}],
+            "deployment": {
+                "channelType": "GOOGLE_TELEPHONY_PLATFORM",
+                "modality": "VOICE_ONLY",
+            },
+        }
+    )
+    eng = PolymorphismEngine(str(copied_base))
+    eng.load_base_project()
+    compiled = eng.compile(card)
+    assert compiled.gecx_config["model"] == "gemini-3-flash-lite"
+    assert compiled.gecx_config["runtime"]["turnTimeoutMs"] == 800
+    assert compiled.gecx_config["default_channel"] == "voice"
+    assert compiled.gecx_config["app_dir"] == "."
+    assert compiled.gecx_config["modality"] == "audio"
+
+
 def test_evaluations_merged(base_dir: Path):
     eng = _engine(base_dir)
     compiled = _compiled(eng, "chat")
@@ -251,6 +279,23 @@ def test_compile_all_raises_on_bad_adapter(copied_base: Path):
     with pytest.raises(CompilationError) as exc:
         eng.compile_all()
     assert any(i["rule_id"] == "AD002" for i in exc.value.issues)
+
+
+def test_compile_all_raises_on_duplicate_channels(copied_base: Path):
+    dup = copied_base / "adapters" / "duplicate_chat.adapter.yaml"
+    dup.write_text(
+        "apiVersion: v1\n"
+        "kind: ChannelAdapter\n"
+        "metadata:\n"
+        "  channel: chat\n"
+        "  displayName: Duplicate Chat\n"
+        "evaluations:\n"
+        "  - sourceDir: adapters/chat_evals\n"
+    )
+    eng = PolymorphismEngine(str(copied_base))
+    with pytest.raises(CompilationError) as exc:
+        eng.compile_all()
+    assert any(i["rule_id"] == "AD007" for i in exc.value.issues)
 
 
 def test_base_not_mutated_across_compiles(base_dir: Path):

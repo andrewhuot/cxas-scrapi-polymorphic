@@ -44,6 +44,11 @@ toolDefinitions:
     toolType: python
     sourceDir: adapters/chat_tools/send_rich_card
 
+# Channel-specific runtime defaults folded into the compiled gecx-config.json.
+gecxConfig:
+  model: gemini-3-pro
+  modality: text
+
 # Inject rich-content hints before the model call when a confirmation is due.
 callbacks:
   - agent: Bella_Notte_Host

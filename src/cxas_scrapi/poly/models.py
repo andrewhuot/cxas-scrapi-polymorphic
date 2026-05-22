@@ -16,7 +16,8 @@
 
 Defines the schema for channel adapter cards — declarative deltas applied
 to a base agent project to produce channel-optimized variants — plus the
-in-memory shape of a compiled project (``CompiledAgentConfig``).
+in-memory shape of a compiled project (``CompiledAgentConfig``).  Unknown
+adapter fields are rejected so misspelled deltas do not disappear silently.
 """
 
 from typing import Any, Dict, List, Literal, Optional
@@ -28,7 +29,11 @@ from pydantic import BaseModel, ConfigDict, Field
 # allow field names like ``model_overrides`` and ``model`` without Pydantic
 # v2 warnings about the reserved ``model_`` namespace) are needed on every
 # model in this module.
-_MODEL_CONFIG = ConfigDict(populate_by_name=True, protected_namespaces=())
+_MODEL_CONFIG = ConfigDict(
+    populate_by_name=True,
+    protected_namespaces=(),
+    extra="forbid",
+)
 
 # Logical callback types accepted in adapter cards.  These map to JSON
 # field names like ``beforeModelCallbacks`` at compile time — see
@@ -200,6 +205,7 @@ class AdapterCard(BaseModel):
     evaluation_datasets: List[EvalReference] = Field(
         default_factory=list, alias="evaluationDatasets"
     )
+    gecx_config: Dict[str, Any] = Field(default_factory=dict, alias="gecxConfig")
     deployment: Optional[DeploymentOverride] = None
 
 

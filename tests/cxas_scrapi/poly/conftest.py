@@ -24,6 +24,7 @@ _TESTS_ROOT = Path(__file__).resolve().parents[2]
 _REPO_ROOT = _TESTS_ROOT.parent
 _BASE_FIXTURE = _TESTS_ROOT / "testdata" / "poly" / "base"
 _BELLA_NOTTE = _REPO_ROOT / "examples" / "bella_notte"
+_POLYMORPHIC_PIZZA = _REPO_ROOT / "examples" / "polymorphic_pizza"
 
 
 @pytest.fixture
@@ -46,3 +47,11 @@ def bella_notte_dir() -> Path:
     if not (_BELLA_NOTTE / "app.json").exists():
         pytest.skip("examples/bella_notte not available")
     return _BELLA_NOTTE
+
+
+@pytest.fixture
+def polymorphic_pizza_dir() -> Path:
+    """Path to the Polymorphic Pizza product-demo project."""
+    if not (_POLYMORPHIC_PIZZA / "app.json").exists():
+        pytest.skip("examples/polymorphic_pizza not available")
+    return _POLYMORPHIC_PIZZA

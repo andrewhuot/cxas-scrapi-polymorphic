@@ -88,7 +88,7 @@ cxas poly validate [--app-dir DIR] [--format text|json] [--strict]
 
 | ID | Severity | Check |
 |----|----------|-------|
-| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types (malformed cards are reported here, not as a traceback). |
+| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`), valid types, and no unknown fields (malformed cards are reported here, not as a traceback). |
 | `AD002` | error | Every agent referenced in `instructionDiffs`, `tools`, `modelOverrides`, `callbacks` exists in `agents/`. |
 | `AD003` | error | `replace_section` diffs set `sectionTag`, and a matching `<sectionTag …>…</sectionTag>` block (attributes allowed) exists in the target instruction. |
 | `AD004` | warning | A tool `remove` references a tool not in the base agent's tool list. |
@@ -139,7 +139,7 @@ cxas poly diff CHANNEL [--app-dir DIR]
 
 ### Output
 
-For each touched agent, the diff shows instruction additions/replacements, tool changes (`+`/`-`), model overrides (`old -> new`), and added callbacks, followed by new tools, merged evaluations, and the deployment overrides.
+For each touched agent, the diff shows instruction additions/replacements, tool changes (`+`/`-`), model overrides (`old -> new`), and added callbacks, followed by new tools, merged evaluations, `gecxConfig` overlays, and deployment overrides.
 
 ### Exit codes
 

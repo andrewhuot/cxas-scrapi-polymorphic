@@ -44,6 +44,16 @@ toolDefinitions:
     toolType: python
     sourceDir: adapters/chat_tools/send_order_card
 
+# Chat can spend a little more latency budget on richer reasoning and UI copy.
+modelOverrides:
+  - agent: Order_Agent
+    model: gemini-3-pro
+
+# Channel-specific runtime defaults folded into the compiled gecx-config.json.
+gecxConfig:
+  model: gemini-3-pro
+  modality: text
+
 # Inject order-card hints before the model call.
 callbacks:
   - agent: Order_Agent
