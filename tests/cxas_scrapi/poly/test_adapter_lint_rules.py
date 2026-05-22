@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the adapters lint-rule category (AD001-AD007)."""
+"""Tests for the adapters lint-rule category (AD001-AD011)."""
 
 from pathlib import Path
 
@@ -21,10 +21,12 @@ import pytest
 from cxas_scrapi.utils.lint_rules.adapters import (
     AdapterAddUndefinedTool,
     AdapterAgentRefsExist,
+    AdapterAppIdentityValid,
     AdapterDeploymentValues,
     AdapterDuplicateChannel,
     AdapterHasEvaluations,
     AdapterPathInScope,
+    AdapterRemoveUnknownTool,
     AdapterReplaceSectionExists,
     AdapterSchemaValid,
     AdapterToolType,
@@ -84,6 +86,19 @@ def test_ad003_missing_section_reported(ctx, copied_base):
     )
     results = AdapterReplaceSectionExists().check(f, f.read_text(), ctx)
     assert any(r.rule_id == "AD003" for r in results)
+
+
+def test_ad004_remove_unknown_tool_warns(ctx, copied_base):
+    f = _adapter(copied_base, "rm.adapter.yaml")
+    f.write_text(
+        "apiVersion: v1\n"
+        "kind: ChannelAdapter\n"
+        "metadata: {channel: rm, displayName: RM}\n"
+        "tools:\n"
+        "  - {agent: Test_Agent, remove: [ghost_tool]}\n"
+    )
+    results = AdapterRemoveUnknownTool().check(f, f.read_text(), ctx)
+    assert any(r.rule_id == "AD004" for r in results)
 
 
 def test_ad005_undefined_tool_reported(ctx, copied_base):
@@ -160,6 +175,18 @@ def test_ad010_bad_tooltype_reported(ctx, copied_base):
     assert any(r.rule_id == "AD010" for r in results)
 
 
+def test_ad011_bad_uuid_reported(ctx, copied_base):
+    f = _adapter(copied_base, "id.adapter.yaml")
+    f.write_text(
+        "apiVersion: v1\n"
+        "kind: ChannelAdapter\n"
+        "metadata: {channel: id, displayName: ID}\n"
+        "appIdentity: {name: not-a-uuid}\n"
+    )
+    results = AdapterAppIdentityValid().check(f, f.read_text(), ctx)
+    assert any(r.rule_id == "AD011" for r in results)
+
+
 def test_rules_autoregister_in_registry():
     registry = build_registry()
     ids = {r.id for r in registry.rules_for_category("adapters")}
@@ -174,4 +201,5 @@ def test_rules_autoregister_in_registry():
         "AD008",
         "AD009",
         "AD010",
+        "AD011",
     } <= ids
