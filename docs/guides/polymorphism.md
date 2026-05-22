@@ -122,5 +122,6 @@ A good rule of thumb: if you find yourself using `replace_section` on most secti
 
 ## Next steps
 
+- **[Polymorphism in 5 Minutes](polymorphism-5-minute-tutorial.md)** — the fastest path through `init`, `validate --explain`, `doctor`, `diff --json`, and `build`.
 - **[Polymorphism Pattern](../patterns/polymorphism.md)** — a step-by-step walkthrough of the Bella Notte chat and voice adapters.
 - **[`cxas poly` CLI reference](../cli/poly.md)** — `init`, `build`, `validate`, `doctor`, and `diff --json`.
