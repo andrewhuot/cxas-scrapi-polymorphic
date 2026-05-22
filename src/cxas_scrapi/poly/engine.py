@@ -676,14 +676,15 @@ class PolymorphismEngine:
             self._write_json(out / "gecx-config.json", compiled.gecx_config)
 
         # 6. Build marker (dotfile, not copied into the next build's source).
-        self._write_json(
-            out / _POLY_MARKER,
-            {
-                "channel": compiled.channel,
-                "source": str(self.app_dir),
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+        # Carries build provenance so a compiled channel records exactly which
+        # base + adapter (at what revision) and which deltas produced it.
+        marker: Dict[str, Any] = {
+            "channel": compiled.channel,
+            "source": str(self.app_dir),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        marker.update(compiled.provenance)
+        self._write_json(out / _POLY_MARKER, marker)
 
         return out
 
