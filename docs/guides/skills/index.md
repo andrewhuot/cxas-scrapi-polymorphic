@@ -24,6 +24,9 @@ The `SKILL.md` file has YAML frontmatter that declares the skill's name, descrip
 │   ├── references/           # Sub-skill definitions (build, run, debug)
 │   ├── scripts/hooks/        # Hook scripts for pre-push and post-update
 │   └── assets/               # Project templates
+├── cxas-polymorphic-adapters/
+│   ├── SKILL.md              # Adapter-card authoring and cxas poly workflows
+│   └── references/           # Authoring, validation, build, and debug guides
 └── cxas-sim-eval/
     └── SKILL.md              # Simulation eval skill
 ```
@@ -65,6 +68,20 @@ Skills are also registered in `.gemini/settings.json`. Invoke from Gemini CLI wi
 | **Debug** | Analyzes failures, proposes fixes, and iterates until a target pass rate is achieved |
 
 The foundry skill acts as a router — when you invoke it, it checks the current state of the environment and routes you to the appropriate sub-skill.
+
+## Polymorphic adapter skill
+
+`cxas-polymorphic-adapters` covers the build-time polymorphism workflow:
+deciding when adapters are a better fit than separate agents, writing
+`adapters/<channel>.adapter.yaml` cards, validating with `cxas poly validate`,
+previewing changes with `cxas poly diff`, building channel-specific projects,
+linting compiled outputs, and debugging `AD001`-`AD010` adapter validation
+issues.
+
+The canonical skill lives at
+`.agents/skills/cxas-polymorphic-adapters/SKILL.md`. Claude-specific and
+Gemini-specific entry points are thin wrappers around that same source so the
+adapter workflow stays consistent across assistants.
 
 ---
 
