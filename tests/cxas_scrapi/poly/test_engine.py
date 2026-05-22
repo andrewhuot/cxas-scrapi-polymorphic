@@ -203,9 +203,20 @@ def test_base_callback_preserved(base_dir: Path):
 def test_deployment_built(base_dir: Path):
     eng = _engine(base_dir)
     compiled = _compiled(eng, "chat")
-    assert compiled.deployment["channelType"] == "WEB_UI"
+    # snake_case block matching Deployments.create_deployment kwargs.
+    assert compiled.deployment["channel_type"] == "WEB_UI"
     assert compiled.deployment["modality"] == "CHAT_ONLY"
     assert compiled.deployment["theme"] == "LIGHT"
+    assert compiled.deployment["deployment_id"] == "chat"
+    # Folded into gecx-config.json (the file deploy tooling reads).
+    assert compiled.gecx_config["deployment"] == compiled.deployment
+
+
+def test_deployment_voice_sets_audio_modality(base_dir: Path):
+    eng = _engine(base_dir)
+    compiled = _compiled(eng, "voice")
+    assert compiled.deployment["channel_type"] == "GOOGLE_TELEPHONY_PLATFORM"
+    assert compiled.gecx_config["modality"] == "audio"
 
 
 def test_evaluations_merged(base_dir: Path):
@@ -262,7 +273,10 @@ def test_write_output_structure(base_dir: Path, tmp_path: Path):
 
     assert (out / "app.json").exists()
     assert (out / "gecx-config.json").exists()
-    assert (out / "deployment.json").exists()
+    # Deployment now lives inside gecx-config.json, not a standalone file.
+    assert not (out / "deployment.json").exists()
+    gecx = json.loads((out / "gecx-config.json").read_text())
+    assert gecx["deployment"]["channel_type"] == "WEB_UI"
     agent_json = out / "agents" / "Test_Agent" / "Test_Agent.json"
     assert agent_json.exists()
     assert (out / "agents" / "Test_Agent" / "instruction.txt").exists()

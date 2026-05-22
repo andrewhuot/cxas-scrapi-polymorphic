@@ -16,13 +16,15 @@
 
 Drives the Polymorphism Engine from the command line: compile base agent
 projects into channel-optimized variants, validate adapter cards, and show
-a human-readable diff of what an adapter changes.
+a human-readable diff of what an adapter changes.  All error paths render
+clean, rule-ID-formatted messages — never a Python traceback.
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from rich.console import Console
 
@@ -31,9 +33,19 @@ from cxas_scrapi.poly.engine import (
     PolymorphismEngine,
 )
 from cxas_scrapi.poly.models import AdapterCard
-from cxas_scrapi.poly.validators import validate_all_adapters
+from cxas_scrapi.poly.validators import (
+    validate_adapter_card,
+    validate_all_adapters,
+)
 
 console = Console()
+
+
+def _counts(issues: List[dict]) -> Tuple[int, int]:
+    """Return ``(errors, warnings)`` for a list of issue dicts."""
+    errors = sum(1 for i in issues if i.get("severity") == "error")
+    warnings = sum(1 for i in issues if i.get("severity") == "warning")
+    return errors, warnings
 
 
 def _print_issues(issues: List[dict]) -> int:
@@ -67,6 +79,12 @@ def _load_engine(app_dir: str) -> PolymorphismEngine:
     return engine
 
 
+def _all_issues(engine: PolymorphismEngine, app_dir: str) -> List[dict]:
+    """Parse errors plus validation issues for every loaded adapter."""
+    cards = [c for c, _ in engine.adapters.values()]
+    return list(engine.adapter_errors) + validate_all_adapters(cards, app_dir)
+
+
 # ── poly build ────────────────────────────────────────────────────────────
 
 
@@ -75,6 +93,8 @@ def poly_build(args: argparse.Namespace) -> None:
     app_dir = str(Path(getattr(args, "app_dir", ".")).resolve())
     channel = getattr(args, "channel", "all")
     output_dir = Path(getattr(args, "output_dir", "./output"))
+    force = getattr(args, "force", False)
+    strict = getattr(args, "strict", False)
 
     try:
         engine = _load_engine(app_dir)
@@ -82,40 +102,54 @@ def poly_build(args: argparse.Namespace) -> None:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
-    if not engine.adapters:
+    if not engine.adapters and not engine.adapter_errors:
         console.print(
             f"[yellow]No adapter cards found in {app_dir}/adapters.[/yellow]"
         )
         sys.exit(1)
 
+    # Decide which channels to build and gather issues to gate on.
+    if channel == "all":
+        targets = list(engine.adapters.values())
+        issues = _all_issues(engine, app_dir)
+    else:
+        if channel not in engine.adapters:
+            console.print(
+                f"[red]Error:[/red] no adapter for channel '{channel}'. "
+                f"Available: {', '.join(sorted(engine.adapters)) or '(none)'}"
+            )
+            if engine.adapter_errors:
+                _print_issues(engine.adapter_errors)
+            sys.exit(1)
+        card, path = engine.adapters[channel]
+        targets = [(card, path)]
+        issues = validate_adapter_card(card, app_dir)
+
+    errors, warnings = _counts(issues)
+    if issues:
+        _print_issues(issues)
+    if errors or (strict and warnings):
+        console.print("\n[red]Build aborted: validation errors.[/red]")
+        sys.exit(1)
+
     try:
-        if channel == "all":
-            compiled = engine.compile_all()
-        else:
-            if channel not in engine.adapters:
-                console.print(
-                    f"[red]Error:[/red] no adapter for channel '{channel}'. "
-                    f"Available: {', '.join(sorted(engine.adapters))}"
-                )
-                sys.exit(1)
-            card, path = engine.adapters[channel]
-            # Run validation for the single channel too.
-            issues = validate_all_adapters([card], app_dir)
-            if _print_issues(issues):
-                console.print("\n[red]Build aborted: validation errors.[/red]")
-                sys.exit(1)
-            compiled = {channel: engine.compile(card, path)}
+        for card, path in targets:
+            ch = card.metadata.channel
+            compiled = engine.compile(card, path, validate=False)
+            out = engine.write_output(
+                compiled, str(output_dir / ch), force=force
+            )
+            console.print(f"[green]Compiled[/green] channel '{ch}' -> {out}")
     except CompilationError as e:
         console.print("[red]Compilation failed:[/red]")
         _print_issues(e.issues)
         sys.exit(1)
-
-    for ch, cfg in compiled.items():
-        out = engine.write_output(cfg, str(output_dir / ch))
-        console.print(f"[green]Compiled[/green] channel '{ch}' -> {out}")
+    except (FileExistsError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
 
     console.print(
-        f"\n[green]Done.[/green] {len(compiled)} channel(s) written to "
+        f"\n[green]Done.[/green] {len(targets)} channel(s) written to "
         f"{output_dir.resolve()}"
     )
     sys.exit(0)
@@ -127,34 +161,52 @@ def poly_build(args: argparse.Namespace) -> None:
 def poly_validate(args: argparse.Namespace) -> None:
     """Handle ``cxas poly validate``."""
     app_dir = str(Path(getattr(args, "app_dir", ".")).resolve())
+    fmt = getattr(args, "format", "text")
+    strict = getattr(args, "strict", False)
 
     try:
         engine = PolymorphismEngine(app_dir)
         engine.load_base_project()
         cards = engine.load_adapter_cards()
     except FileNotFoundError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
-    except Exception as e:  # noqa: BLE001 - surface parse errors clearly
-        console.print(f"[red]Failed to parse adapter cards:[/red] {e}")
+        if fmt == "json":
+            print(json.dumps({"error": str(e), "issues": []}, indent=2))
+        else:
+            console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
-    if not cards:
+    issues = list(engine.adapter_errors) + validate_all_adapters(cards, app_dir)
+    errors, warnings = _counts(issues)
+
+    if fmt == "json":
+        print(
+            json.dumps(
+                {
+                    "app_dir": app_dir,
+                    "cards": len(cards),
+                    "errors": errors,
+                    "warnings": warnings,
+                    "issues": issues,
+                },
+                indent=2,
+            )
+        )
+        sys.exit(1 if (errors or (strict and warnings)) else 0)
+
+    if not cards and not engine.adapter_errors:
         console.print(
             f"[yellow]No adapter cards found in {app_dir}/adapters.[/yellow]"
         )
         sys.exit(0)
 
-    issues = validate_all_adapters(cards, app_dir)
     if not issues:
         console.print(f"[green]All {len(cards)} adapter card(s) valid.[/green]")
         sys.exit(0)
 
     console.print(f"Validated {len(cards)} adapter card(s) for {app_dir}:\n")
-    errors = _print_issues(issues)
-    warnings = len(issues) - errors
+    _print_issues(issues)
     console.print(f"\n  {errors} error(s), {warnings} warning(s)")
-    sys.exit(1 if errors else 0)
+    sys.exit(1 if (errors or (strict and warnings)) else 0)
 
 
 # ── poly diff ────────────────────────────────────────────────────────────────
@@ -184,6 +236,8 @@ def poly_diff(args: argparse.Namespace) -> None:
             f"[red]Error:[/red] no adapter for channel '{channel}'. "
             f"Available: {', '.join(sorted(engine.adapters)) or '(none)'}"
         )
+        if engine.adapter_errors:
+            _print_issues(engine.adapter_errors)
         sys.exit(1)
     card, card_path = entry
 
@@ -283,17 +337,22 @@ def poly_diff(args: argparse.Namespace) -> None:
         for name in sorted(compiled.tools):
             console.print(f"  [green]+ {name}[/green]")
 
-    # Evaluations.
-    if compiled.evaluations:
-        console.print("\n[bold cyan]evaluations/[/bold cyan]")
-        console.print(
-            f"  [green]+ {len(compiled.evaluations)} eval(s):[/green] "
-            f"{', '.join(sorted(compiled.evaluations))}"
-        )
+    # Evaluations / expectations / datasets.
+    for label, items in (
+        ("evaluations", compiled.evaluations),
+        ("evaluationExpectations", compiled.evaluation_expectations),
+        ("evaluationDatasets", compiled.evaluation_datasets),
+    ):
+        if items:
+            console.print(f"\n[bold cyan]{label}/[/bold cyan]")
+            console.print(
+                f"  [green]+ {len(items)} item(s):[/green] "
+                f"{', '.join(sorted(items))}"
+            )
 
-    # Deployment.
+    # Deployment (folded into gecx-config.json).
     if compiled.deployment:
-        console.print("\n[bold cyan]deployment.json[/bold cyan]")
+        console.print("\n[bold cyan]gecx-config.json (deployment)[/bold cyan]")
         for k, v in compiled.deployment.items():
             console.print(f"  [green]+ {k}: {v}[/green]")
 
@@ -335,6 +394,16 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default="./output",
         help="Output directory (default: ./output).",
     )
+    p_build.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite a non-empty output directory not created by poly.",
+    )
+    p_build.add_argument(
+        "--strict",
+        action="store_true",
+        help="Treat warnings as errors (abort the build).",
+    )
     p_build.set_defaults(func=poly_build)
 
     # validate
@@ -345,6 +414,17 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         "--app-dir",
         default=".",
         help="Path to the agent project root (default: current directory).",
+    )
+    p_validate.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format (default: text).",
+    )
+    p_validate.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if any warnings are present.",
     )
     p_validate.set_defaults(func=poly_validate)
 

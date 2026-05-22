@@ -34,13 +34,15 @@ cxas poly build [--app-dir DIR]
 |--------|----------|---------|-------------|
 | `--app-dir DIR` | No | `.` (current directory) | Path to the base agent project root (the directory containing `app.json`, `agents/`, `tools/`, `adapters/`). |
 | `--channel NAME` | No | `all` | A specific channel to compile (matched against an adapter's `metadata.channel`), or `all` to compile every adapter. |
-| `--output-dir DIR` | No | `./output` | Directory to write compiled projects into. Each channel is written to `<output-dir>/<channel>/`. |
+| `--output-dir DIR` | No | `./output` | Directory to write compiled projects into. Each channel is written to `<output-dir>/<channel>/`. Must not overlap the base project. |
+| `--force` | No | off | Overwrite a `<output-dir>/<channel>/` that is non-empty and was **not** created by `cxas poly build`. Without it, such a directory is left untouched. |
+| `--strict` | No | off | Treat warnings as errors and abort the build. |
 
 ### Behavior
 
-- With `--channel all`, all adapters are validated first; if any **error**-severity issue is found, nothing is written.
+- With `--channel all`, all adapters are validated first; if any **error**-severity issue is found (including a malformed card), nothing is written.
 - With a specific `--channel`, only that adapter is validated and compiled.
-- Each existing `<output-dir>/<channel>/` directory is replaced on every build.
+- A `<output-dir>/<channel>/` directory is replaced only when it is empty or was previously produced by `cxas poly build` (it carries a `.poly_build.json` marker); otherwise the build refuses unless `--force` is given. The output directory may never overlap the base project.
 
 ### Exit codes
 
@@ -71,7 +73,7 @@ Validate every adapter card against the base project structure. Prints results i
 ### Usage
 
 ```
-cxas poly validate [--app-dir DIR]
+cxas poly validate [--app-dir DIR] [--format text|json] [--strict]
 ```
 
 ### Options
@@ -79,18 +81,23 @@ cxas poly validate [--app-dir DIR]
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
 | `--app-dir DIR` | No | `.` (current directory) | Path to the base agent project root. |
+| `--format` | No | `text` | Output format. `json` emits a machine-readable report (`errors`, `warnings`, `issues[]`) for CI. |
+| `--strict` | No | off | Exit non-zero if any warnings are present (not just errors). |
 
 ### Rules
 
 | ID | Severity | Check |
 |----|----------|-------|
-| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types. |
+| `AD001` | error | Adapter card has required fields (`apiVersion`, `kind`, `metadata.channel`) and valid types (malformed cards are reported here, not as a traceback). |
 | `AD002` | error | Every agent referenced in `instructionDiffs`, `tools`, `modelOverrides`, `callbacks` exists in `agents/`. |
-| `AD003` | error | `replace_section` diffs set `sectionTag`, and the `<sectionTag>` exists in the target instruction. |
+| `AD003` | error | `replace_section` diffs set `sectionTag`, and a matching `<sectionTag …>…</sectionTag>` block (attributes allowed) exists in the target instruction. |
 | `AD004` | warning | A tool `remove` references a tool not in the base agent's tool list. |
-| `AD005` | error | A tool `add` references a tool defined neither in `tools/` nor in the adapter's `toolDefinitions`. |
+| `AD005` | error | A tool `add` references a tool defined neither in `tools/`, the adapter's `toolDefinitions`, nor a platform tool; or a referenced `pythonCode`/`sourceDir` is missing. |
 | `AD006` | warning | The adapter declares no `evaluations` entries. |
 | `AD007` | error | Two adapter cards target the same `metadata.channel`. |
+| `AD008` | error | A referenced `sourceDir`/`pythonCode` path escapes the project root. |
+| `AD009` | error | `deployment` `channelType`/`modality`/`theme` use known, supported values. |
+| `AD010` | error | `toolDefinitions` declare a supported `toolType` (`python`, `openapi`). |
 
 > **Note on rule IDs:** the `AD` prefix is used (not `A`) because the `config` lint category already owns `A001`–`A006`. The same rules run inside `cxas lint --only adapters`.
 
@@ -98,8 +105,8 @@ cxas poly validate [--app-dir DIR]
 
 | Code | Meaning |
 |------|---------|
-| `0` | No errors (warnings may be present), or no adapter cards found. |
-| `1` | One or more **error**-severity issues, or a missing base project. |
+| `0` | No errors (warnings may be present, unless `--strict`), or no adapter cards found. |
+| `1` | One or more **error**-severity issues (or any warnings with `--strict`), or a missing base project. |
 
 ### Example
 
@@ -154,8 +161,8 @@ agents/Bella_Notte_Host
   instruction: + N line(s) append
   callbacks: + before_model (Inject voice pacing and filler-phrase hints.)
 
-deployment.json
-  + channelType: GOOGLE_TELEPHONY_PLATFORM
+gecx-config.json (deployment)
+  + channel_type: GOOGLE_TELEPHONY_PLATFORM
   + modality: VOICE_ONLY
 ```
 
@@ -165,4 +172,4 @@ deployment.json
 
 - **[Polymorphism guide](../guides/polymorphism.md)**
 - **[Polymorphism pattern](../patterns/polymorphism.md)**
-- **[`cxas lint`](lint.md)** — the `adapters` category runs `AD001`–`AD007` as part of a normal lint.
+- **[`cxas lint`](lint.md)** — the `adapters` category runs `AD001`–`AD010` as part of a normal lint.

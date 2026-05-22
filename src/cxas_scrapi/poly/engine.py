@@ -24,18 +24,29 @@ import json
 import re
 import shutil
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
+from pydantic import ValidationError
 
+from cxas_scrapi.poly.instructions import apply_instruction_diff
 from cxas_scrapi.poly.models import (
     AdapterCard,
     CompiledAgentConfig,
     DeploymentOverride,
-    InstructionDiff,
 )
-from cxas_scrapi.poly.validators import validate_all_adapters
+from cxas_scrapi.poly.validators import (
+    resolve_within,
+    validate_adapter_card,
+    validate_all_adapters,
+)
+
+# Marker file written into every compiled channel directory.  Its presence
+# tells a later build that the directory is a poly artifact and is therefore
+# safe to overwrite (see ``write_output``).
+_POLY_MARKER = ".poly_build.json"
 
 # Logical callback type -> agent-JSON field name (camelCase).
 CALLBACK_TYPE_TO_FIELD: Dict[str, str] = {
@@ -60,6 +71,25 @@ CALLBACK_TYPE_TO_DIR: Dict[str, str] = {
 # Top-level base-project items that the engine reconstructs (rather than
 # copying verbatim) when writing output.
 _RECONSTRUCTED_ITEMS = {"adapters", "agents", "app.json", "gecx-config.json"}
+
+
+def _format_validation_error(e: ValidationError) -> str:
+    """Render a pydantic ``ValidationError`` as a short field-pointed string."""
+    parts: List[str] = []
+    for err in e.errors():
+        loc = ".".join(str(x) for x in err.get("loc", ()))
+        msg = err.get("msg", "")
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return "; ".join(parts) or str(e)
+
+
+def _is_relative_to(a: Path, b: Path) -> bool:
+    """True if path ``a`` is ``b`` or lives somewhere under ``b``."""
+    try:
+        a.relative_to(b)
+        return True
+    except ValueError:
+        return False
 
 
 class CompilationError(Exception):
@@ -133,6 +163,10 @@ class PolymorphismEngine:
         self.base: Optional[BaseProject] = None
         # channel -> (card, card_path)
         self.adapters: Dict[str, Tuple[AdapterCard, Path]] = {}
+        # Per-file parse / schema errors collected by ``load_adapter_cards``
+        # (issue dicts).  A malformed card is recorded here instead of raising,
+        # so one bad card never blocks compiling the others.
+        self.adapter_errors: List[Dict[str, Any]] = []
 
     # ── Loading ──────────────────────────────────────────────────────────
 
@@ -245,12 +279,15 @@ class PolymorphismEngine:
         """Glob and parse all adapter cards under ``adapters/``.
 
         Recognizes ``*.adapter.yaml``, ``*.adapter.yml`` and
-        ``*.adapter.json``.  Populates ``self.adapters`` keyed by channel
-        and returns the parsed cards in filename order.
+        ``*.adapter.json``.  Populates ``self.adapters`` keyed by channel and
+        returns the successfully parsed cards in filename order.  A card that
+        fails to parse or validate is recorded in ``self.adapter_errors`` (as
+        an ``AD001`` issue dict) and skipped — it never raises.
         """
         adapters_dir = self.app_dir / "adapters"
         cards: List[AdapterCard] = []
         self.adapters = {}
+        self.adapter_errors = []
         if not adapters_dir.exists():
             return cards
 
@@ -260,56 +297,94 @@ class PolymorphismEngine:
             + list(adapters_dir.glob("*.adapter.json"))
         )
         for path in paths:
-            raw = path.read_text()
-            if path.suffix == ".json":
-                data = json.loads(raw)
-            else:
-                data = yaml.safe_load(raw)
-            card = AdapterCard.model_validate(data)
+            rel = path.name
+            try:
+                raw = path.read_text()
+                data = (
+                    json.loads(raw)
+                    if path.suffix == ".json"
+                    else yaml.safe_load(raw)
+                )
+            except (OSError, json.JSONDecodeError, yaml.YAMLError) as e:
+                self._record_card_error(
+                    rel, f"Adapter card is not valid {path.suffix}: {e}"
+                )
+                continue
+            if not isinstance(data, dict):
+                self._record_card_error(
+                    rel, "Adapter card must be a mapping/object."
+                )
+                continue
+            try:
+                card = AdapterCard.model_validate(data)
+            except ValidationError as e:
+                self._record_card_error(
+                    rel,
+                    "Adapter card schema invalid: "
+                    + _format_validation_error(e),
+                )
+                continue
             cards.append(card)
             self.adapters[card.metadata.channel] = (card, path)
         return cards
 
+    def _record_card_error(self, rel: str, message: str) -> None:
+        self.adapter_errors.append(
+            {
+                "rule_id": "AD001",
+                "severity": "error",
+                "message": message,
+                "path": f"adapters/{rel}",
+            }
+        )
+
     # ── Compilation ──────────────────────────────────────────────────────
 
     def compile(
-        self, adapter: AdapterCard, card_path: Optional[Path] = None
+        self,
+        adapter: AdapterCard,
+        card_path: Optional[Path] = None,
+        validate: bool = True,
     ) -> CompiledAgentConfig:
         """Compile the base project against one adapter card.
 
+        Validation (:func:`validate_adapter_card`) runs first and is the single
+        source of truth: a card that validates clean always compiles.  The apply
+        steps below therefore trust the validated card and do not re-implement
+        existence/section checks.
+
         Args:
             adapter: The parsed adapter card.
-            card_path: Path to the adapter card file, used to resolve
-                relative paths (``pythonCode``, ``sourceDir``).  Defaults
-                to ``<app_dir>/adapters`` when not provided.
+            card_path: Path to the adapter card file (currently informational;
+                all adapter paths resolve relative to the project root).
+            validate: Run ``validate_adapter_card`` first and raise on errors.
+                ``compile_all`` sets this False after running the full
+                cross-adapter validation pass once.
 
         Returns:
             A fully resolved ``CompiledAgentConfig``.
 
         Raises:
-            CompilationError: if a referenced agent or instruction section
-                cannot be resolved.
+            CompilationError: if validation finds any error-severity issue.
         """
         if self.base is None:
             self.load_base_project()
         assert self.base is not None
 
         channel = adapter.metadata.channel
-        card_dir = (
-            card_path.parent
-            if card_path is not None
-            else self.app_dir / "adapters"
-        )
+
+        if validate:
+            errors = [
+                i
+                for i in validate_adapter_card(adapter, str(self.app_dir))
+                if i.get("severity") == "error"
+            ]
+            if errors:
+                raise CompilationError(errors)
 
         def resolve_path(ref: str) -> Path:
-            """Resolve an adapter path: app_dir-relative (per spec) first,
-            then card-relative as a fallback."""
-            primary = (self.app_dir / ref).resolve()
-            if primary.exists():
-                return primary
-            return (card_dir / ref).resolve()
-
-        issues: List[Dict[str, Any]] = []
+            path, _inside = resolve_within(str(self.app_dir), ref)
+            return path
 
         # Step 1: deep copy mutable base state.
         agent_configs: Dict[str, Dict[str, Any]] = {
@@ -327,57 +402,20 @@ class PolymorphismEngine:
             b.display_name: name for name, b in self.base.agents.items()
         }
 
-        def resolve_agent(ref: str) -> Optional[str]:
-            if ref in agent_configs:
-                return ref
-            return display_to_dir.get(ref)
+        def resolve_agent(ref: str) -> str:
+            # Validated card: the agent always resolves.
+            return ref if ref in agent_configs else display_to_dir[ref]
 
         # Step 2: instruction diffs.
-        for i, diff in enumerate(adapter.instruction_diffs):
+        for diff in adapter.instruction_diffs:
             dir_name = resolve_agent(diff.agent)
-            if dir_name is None:
-                issues.append(
-                    {
-                        "rule_id": "AD002",
-                        "severity": "error",
-                        "message": (
-                            f"Agent '{diff.agent}' in instructionDiffs[{i}] "
-                            "does not exist."
-                        ),
-                        "path": channel,
-                    }
-                )
-                continue
-            try:
-                instructions[dir_name] = self._apply_instruction_diff(
-                    instructions[dir_name], diff
-                )
-            except ValueError as e:
-                issues.append(
-                    {
-                        "rule_id": "AD003",
-                        "severity": "error",
-                        "message": str(e),
-                        "path": channel,
-                    }
-                )
+            instructions[dir_name] = apply_instruction_diff(
+                instructions[dir_name], diff
+            )
 
         # Step 3: tool add / remove.
         for mod in adapter.tools:
-            dir_name = resolve_agent(mod.agent)
-            if dir_name is None:
-                issues.append(
-                    {
-                        "rule_id": "AD002",
-                        "severity": "error",
-                        "message": (
-                            f"Agent '{mod.agent}' in tools does not exist."
-                        ),
-                        "path": channel,
-                    }
-                )
-                continue
-            cfg = agent_configs[dir_name]
+            cfg = agent_configs[resolve_agent(mod.agent)]
             tool_list = list(cfg.get("tools", []))
             for t in mod.add:
                 if t not in tool_list:
@@ -388,74 +426,32 @@ class PolymorphismEngine:
         # Step 4: channel-specific tool definitions.
         new_tools: Dict[str, Dict[str, Any]] = {}
         new_tool_code: Dict[str, str] = {}
+        tool_source_dirs: Dict[str, str] = {}
         for td in adapter.tool_definitions:
             src = resolve_path(td.source_dir)
-            cfg, rel, code = self._read_tool_dir(src, td.display_name)
-            if cfg is None:
-                issues.append(
-                    {
-                        "rule_id": "AD005",
-                        "severity": "error",
-                        "message": (
-                            f"Tool definition '{td.display_name}' sourceDir "
-                            f"'{td.source_dir}' is missing or has no JSON."
-                        ),
-                        "path": channel,
-                    }
-                )
-                continue
-            new_tools[td.display_name] = cfg
-            if code is not None:
-                new_tool_code[td.display_name] = code
+            if td.tool_type == "python":
+                cfg, _rel, code = self._read_tool_dir(src, td.display_name)
+                if cfg is not None:
+                    new_tools[td.display_name] = cfg
+                    if code is not None:
+                        new_tool_code[td.display_name] = code
+            else:
+                # Non-python (e.g. openapi): copy the source directory verbatim
+                # so any spec/aux files come along unchanged.
+                cfg = self._read_tool_config(src, td.display_name)
+                if cfg is not None:
+                    new_tools[td.display_name] = cfg
+                tool_source_dirs[td.display_name] = str(src)
 
         # Step 5: model overrides.
         for mo in adapter.model_overrides:
-            dir_name = resolve_agent(mo.agent)
-            if dir_name is None:
-                issues.append(
-                    {
-                        "rule_id": "AD002",
-                        "severity": "error",
-                        "message": (
-                            f"Agent '{mo.agent}' in modelOverrides does not "
-                            "exist."
-                        ),
-                        "path": channel,
-                    }
-                )
-                continue
-            cfg = agent_configs[dir_name]
+            cfg = agent_configs[resolve_agent(mo.agent)]
             cfg.setdefault("modelSettings", {})["model"] = mo.model
 
         # Step 6: channel-specific callbacks.
         for cb in adapter.callbacks:
             dir_name = resolve_agent(cb.agent)
-            if dir_name is None:
-                issues.append(
-                    {
-                        "rule_id": "AD002",
-                        "severity": "error",
-                        "message": (
-                            f"Agent '{cb.agent}' in callbacks does not exist."
-                        ),
-                        "path": channel,
-                    }
-                )
-                continue
             code_path = resolve_path(cb.python_code)
-            if not code_path.exists():
-                issues.append(
-                    {
-                        "rule_id": "AD005",
-                        "severity": "error",
-                        "message": (
-                            f"Callback pythonCode '{cb.python_code}' not "
-                            f"found for agent '{cb.agent}'."
-                        ),
-                        "path": channel,
-                    }
-                )
-                continue
             cfg = agent_configs[dir_name]
             field_name = CALLBACK_TYPE_TO_FIELD[cb.type]
             dir_kind = CALLBACK_TYPE_TO_DIR[cb.type]
@@ -467,11 +463,18 @@ class PolymorphismEngine:
             )
             callback_code[rel] = code_path.read_text()
 
-        # Step 7: merge channel evaluations.
+        # Step 7: merge channel evaluations / expectations / datasets.
         evaluations: Dict[str, Dict[str, Any]] = {}
         for ev in adapter.evaluations:
-            src = resolve_path(ev.source_dir)
-            evaluations.update(self._read_eval_dir(src))
+            evaluations.update(self._read_eval_dir(resolve_path(ev.source_dir)))
+        expectations: Dict[str, Dict[str, Any]] = {}
+        for ev in adapter.evaluation_expectations:
+            expectations.update(
+                self._read_eval_dir(resolve_path(ev.source_dir))
+            )
+        datasets: Dict[str, Dict[str, Any]] = {}
+        for ev in adapter.evaluation_datasets:
+            datasets.update(self._read_eval_dir(resolve_path(ev.source_dir)))
 
         # Step 8: deployment + gecx config.
         gecx_config = copy.deepcopy(self.base.gecx_config)
@@ -484,14 +487,18 @@ class PolymorphismEngine:
             deployment = self._build_deployment(
                 adapter.deployment, adapter.metadata.display_name, channel
             )
-            modality = adapter.deployment.modality
+            # Fold the per-channel deployment block into gecx-config.json — the
+            # file deploy/lint tooling reads — rather than an orphan file.
+            gecx_config["deployment"] = deployment
+            modality = adapter.deployment.modality or (
+                adapter.deployment.web_widget_config.modality
+                if adapter.deployment.web_widget_config
+                else None
+            )
             if modality:
                 gecx_config["modality"] = (
                     "audio" if "VOICE" in modality.upper() else "text"
                 )
-
-        if issues:
-            raise CompilationError(issues)
 
         return CompiledAgentConfig(
             channel=channel,
@@ -501,7 +508,10 @@ class PolymorphismEngine:
             agent_instructions=instructions,
             tools=new_tools,
             tool_code=new_tool_code,
+            tool_source_dirs=tool_source_dirs,
             evaluations=evaluations,
+            evaluation_expectations=expectations,
+            evaluation_datasets=datasets,
             deployment=deployment,
             callback_code=callback_code,
         )
@@ -521,7 +531,8 @@ class PolymorphismEngine:
         cards = self.load_adapter_cards()
 
         adapters = [c for c, _ in self.adapters.values()]
-        issues = validate_all_adapters(adapters, str(self.app_dir))
+        issues = list(self.adapter_errors)
+        issues += validate_all_adapters(adapters, str(self.app_dir))
         errors = [i for i in issues if i.get("severity") == "error"]
         if errors:
             raise CompilationError(errors)
@@ -529,13 +540,18 @@ class PolymorphismEngine:
         result: Dict[str, CompiledAgentConfig] = {}
         for card in cards:
             _, path = self.adapters[card.metadata.channel]
-            result[card.metadata.channel] = self.compile(card, path)
+            result[card.metadata.channel] = self.compile(
+                card, path, validate=False
+            )
         return result
 
     # ── Output ───────────────────────────────────────────────────────────
 
     def write_output(
-        self, compiled: CompiledAgentConfig, output_dir: str
+        self,
+        compiled: CompiledAgentConfig,
+        output_dir: str,
+        force: bool = False,
     ) -> Path:
         """Write a compiled config as a complete agent project directory.
 
@@ -544,11 +560,40 @@ class PolymorphismEngine:
         agents, app.json and gecx-config.json are reconstructed from the
         compiled state; channel-specific tools/evaluations are added.
 
+        Safety: the target is replaced only when it is empty, was produced by a
+        previous ``cxas poly build`` (carries the ``.poly_build.json`` marker),
+        or ``force`` is True.  It never overlaps the source project directory.
+
         Returns:
             The output directory path.
+
+        Raises:
+            ValueError: if ``output_dir`` overlaps the base project directory.
+            FileExistsError: if the target exists, is non-empty, was not
+                produced by poly, and ``force`` is False.
         """
         out = Path(output_dir).resolve()
+
+        if (
+            out == self.app_dir
+            or _is_relative_to(out, self.app_dir)
+            or _is_relative_to(self.app_dir, out)
+        ):
+            raise ValueError(
+                f"Refusing to write output to '{out}': it overlaps the base "
+                f"project '{self.app_dir}'. Choose an --output-dir outside the "
+                "project."
+            )
+
         if out.exists():
+            is_empty = not any(out.iterdir())
+            is_poly = (out / _POLY_MARKER).is_file()
+            if not (force or is_empty or is_poly):
+                raise FileExistsError(
+                    f"Refusing to overwrite '{out}': it is not empty and was "
+                    "not created by 'cxas poly build'. Re-run with "
+                    "force/--force to overwrite it."
+                )
             shutil.rmtree(out)
         out.mkdir(parents=True, exist_ok=True)
 
@@ -585,7 +630,12 @@ class PolymorphismEngine:
 
         # 3. Channel-specific tool definitions (base tools already copied).
         for tool_name, cfg in compiled.tools.items():
+            src_dir = compiled.tool_source_dirs.get(tool_name)
             tool_out = out / "tools" / tool_name
+            if src_dir is not None:
+                # Non-python tool: copy the whole source dir verbatim.
+                shutil.copytree(Path(src_dir), tool_out, dirs_exist_ok=True)
+                continue
             tool_out.mkdir(parents=True, exist_ok=True)
             self._write_json(tool_out / f"{tool_name}.json", cfg)
             code = compiled.tool_code.get(tool_name)
@@ -597,23 +647,32 @@ class PolymorphismEngine:
                 code_path.parent.mkdir(parents=True, exist_ok=True)
                 code_path.write_text(code)
 
-        # 4. Channel-specific evaluations (base evals already copied).
-        for eval_name, data in compiled.evaluations.items():
-            eval_out = out / "evaluations" / eval_name
-            eval_out.mkdir(parents=True, exist_ok=True)
-            self._write_json(eval_out / f"{eval_name}.json", data)
+        # 4. Channel-specific evals / expectations / datasets (base copied).
+        for subdir, items in (
+            ("evaluations", compiled.evaluations),
+            ("evaluationExpectations", compiled.evaluation_expectations),
+            ("evaluationDatasets", compiled.evaluation_datasets),
+        ):
+            for name, data in items.items():
+                item_out = out / subdir / name
+                item_out.mkdir(parents=True, exist_ok=True)
+                self._write_json(item_out / f"{name}.json", data)
 
-        for exp_name, data in compiled.evaluation_expectations.items():
-            exp_out = out / "evaluationExpectations" / exp_name
-            exp_out.mkdir(parents=True, exist_ok=True)
-            self._write_json(exp_out / f"{exp_name}.json", data)
-
-        # 5. Root config files.
+        # 5. Root config files.  Per-channel deployment settings live inside
+        # gecx-config.json (compiled.gecx_config["deployment"]).
         self._write_json(out / "app.json", compiled.app_config)
         if compiled.gecx_config:
             self._write_json(out / "gecx-config.json", compiled.gecx_config)
-        if compiled.deployment is not None:
-            self._write_json(out / "deployment.json", compiled.deployment)
+
+        # 6. Build marker (dotfile, not copied into the next build's source).
+        self._write_json(
+            out / _POLY_MARKER,
+            {
+                "channel": compiled.channel,
+                "source": str(self.app_dir),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
         return out
 
@@ -638,31 +697,6 @@ class PolymorphismEngine:
         if indices:
             return max(indices) + 1
         return len(entries or []) + 1
-
-    @staticmethod
-    def _apply_instruction_diff(text: str, diff: InstructionDiff) -> str:
-        if diff.mode == "append":
-            sep = "" if text.endswith("\n") else "\n"
-            return f"{text}{sep}\n{diff.content}"
-        if diff.mode == "prepend":
-            return f"{diff.content}\n\n{text}"
-        # replace_section
-        tag = diff.section_tag
-        if not tag:
-            raise ValueError(
-                f"replace_section requires sectionTag (agent '{diff.agent}')."
-            )
-        pattern = re.compile(
-            rf"<{re.escape(tag)}\b[^>]*>.*?</{re.escape(tag)}>",
-            re.DOTALL,
-        )
-        if not pattern.search(text):
-            raise ValueError(
-                f"AD003: section <{tag}> not found in instruction for "
-                f"agent '{diff.agent}'."
-            )
-        replacement = f"<{tag}>\n{diff.content.rstrip()}\n</{tag}>"
-        return pattern.sub(lambda _m: replacement, text, count=1)
 
     def _read_tool_dir(
         self, src: Path, display_name: str
@@ -704,6 +738,20 @@ class PolymorphismEngine:
             config["pythonFunction"]["pythonCode"] = canonical
 
         return config, canonical, code
+
+    def _read_tool_config(
+        self, src: Path, display_name: str
+    ) -> Optional[Dict[str, Any]]:
+        """Read a non-python tool's JSON config verbatim (no normalization)."""
+        if not src.exists() or not src.is_dir():
+            return None
+        json_path = src / f"{display_name}.json"
+        if not json_path.exists():
+            candidates = list(src.glob("*.json"))
+            if not candidates:
+                return None
+            json_path = candidates[0]
+        return self._read_json(json_path)
 
     def _read_eval_dir(self, src: Path) -> Dict[str, Dict[str, Any]]:
         """Read all evaluation files under a source directory.
@@ -748,23 +796,30 @@ class PolymorphismEngine:
     def _build_deployment(
         override: DeploymentOverride, display_name: str, channel: str
     ) -> Dict[str, Any]:
-        out: Dict[str, Any] = {}
+        """Build the gecx-config ``deployment`` block.
+
+        Keys use snake_case to match both ``gecx-config.json`` convention and
+        the kwargs of ``cxas_scrapi.core.deployments.Deployments`` so a deploy
+        step can consume it directly.
+        """
+        out: Dict[str, Any] = {
+            "deployment_id": channel,
+            "display_name": display_name,
+        }
         if override.channel_type is not None:
-            out["channelType"] = override.channel_type
+            out["channel_type"] = override.channel_type
         if override.modality is not None:
             out["modality"] = override.modality
         if override.disable_dtmf is not None:
-            out["disableDtmf"] = override.disable_dtmf
+            out["disable_dtmf"] = override.disable_dtmf
         if override.disable_barge_in_control is not None:
-            out["disableBargeInControl"] = override.disable_barge_in_control
+            out["disable_barge_in_control"] = override.disable_barge_in_control
         wwc = override.web_widget_config
         if wwc is not None:
             if wwc.theme is not None:
                 out["theme"] = wwc.theme
             if wwc.web_widget_title is not None:
-                out["webWidgetTitle"] = wwc.web_widget_title
+                out["web_widget_title"] = wwc.web_widget_title
             if wwc.modality is not None and "modality" not in out:
                 out["modality"] = wwc.modality
-        out["displayName"] = display_name
-        out["deploymentId"] = channel
         return out
