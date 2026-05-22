@@ -21,10 +21,13 @@ import pytest
 from cxas_scrapi.utils.lint_rules.adapters import (
     AdapterAddUndefinedTool,
     AdapterAgentRefsExist,
+    AdapterDeploymentValues,
     AdapterDuplicateChannel,
     AdapterHasEvaluations,
+    AdapterPathInScope,
     AdapterReplaceSectionExists,
     AdapterSchemaValid,
+    AdapterToolType,
 )
 from cxas_scrapi.utils.linter import LintContext, build_registry
 
@@ -117,9 +120,58 @@ def test_ad007_duplicate_channel_reported(ctx, copied_base):
     assert any(r.rule_id == "AD007" for r in results)
 
 
+def test_ad008_path_escape_reported(ctx, copied_base):
+    f = _adapter(copied_base, "esc.adapter.yaml")
+    f.write_text(
+        "apiVersion: v1\n"
+        "kind: ChannelAdapter\n"
+        "metadata: {channel: esc, displayName: Esc}\n"
+        "callbacks:\n"
+        "  - {agent: Test_Agent, type: before_model, "
+        "pythonCode: ../../../etc/passwd}\n"
+    )
+    results = AdapterPathInScope().check(f, f.read_text(), ctx)
+    assert any(r.rule_id == "AD008" for r in results)
+
+
+def test_ad009_bad_deployment_reported(ctx, copied_base):
+    f = _adapter(copied_base, "dep.adapter.yaml")
+    f.write_text(
+        "apiVersion: v1\n"
+        "kind: ChannelAdapter\n"
+        "metadata: {channel: dep, displayName: Dep}\n"
+        "deployment: {channelType: BOGUS}\n"
+    )
+    results = AdapterDeploymentValues().check(f, f.read_text(), ctx)
+    assert any(r.rule_id == "AD009" for r in results)
+
+
+def test_ad010_bad_tooltype_reported(ctx, copied_base):
+    f = _adapter(copied_base, "tt.adapter.yaml")
+    f.write_text(
+        "apiVersion: v1\n"
+        "kind: ChannelAdapter\n"
+        "metadata: {channel: tt, displayName: TT}\n"
+        "toolDefinitions:\n"
+        "  - {displayName: x, toolType: wasm, "
+        "sourceDir: adapters/chat_tools/extra_tool}\n"
+    )
+    results = AdapterToolType().check(f, f.read_text(), ctx)
+    assert any(r.rule_id == "AD010" for r in results)
+
+
 def test_rules_autoregister_in_registry():
     registry = build_registry()
     ids = {r.id for r in registry.rules_for_category("adapters")}
-    assert {"AD001", "AD002", "AD003", "AD004", "AD005", "AD006", "AD007"} <= (
-        ids
-    )
+    assert {
+        "AD001",
+        "AD002",
+        "AD003",
+        "AD004",
+        "AD005",
+        "AD006",
+        "AD007",
+        "AD008",
+        "AD009",
+        "AD010",
+    } <= ids

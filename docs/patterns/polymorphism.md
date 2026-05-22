@@ -92,7 +92,7 @@ Section by section:
 - **`tools` + `toolDefinitions`** — make `send_rich_card` available to the host *and* bring its definition (`send_rich_card.json` + `python_code.py`) into `tools/`. The engine normalizes the tool's code path to the canonical `tools/send_rich_card/python_function/python_code.py`.
 - **`callbacks`** — append a `before_model` callback. The base host already has `before_model_callbacks_01`, so this becomes `before_model_callbacks_02` automatically.
 - **`evaluations`** — fold the `adapters/chat_evals/` directory into the compiled `evaluations/`.
-- **`deployment`** — emit a `deployment.json` for a `WEB_UI` / `CHAT_ONLY` deployment.
+- **`deployment`** — fold a `deployment` block (`channel_type: WEB_UI`, `modality: CHAT_ONLY`, widget settings) into the compiled `gecx-config.json`, and set `default_channel`/`modality`.
 
 ---
 
@@ -184,8 +184,8 @@ tools/
 evaluations/
   + 1 eval(s): Rich_Card_Confirmation
 
-deployment.json
-  + channelType: WEB_UI
+gecx-config.json (deployment)
+  + channel_type: WEB_UI
   + modality: CHAT_ONLY
 ```
 
@@ -203,7 +203,8 @@ cxas lint --app-dir ./output/voice
 # Run the merged eval suite (base + channel goldens) on a channel.
 cxas run --app-dir ./output/chat --eval-dir ./output/chat/evaluations
 
-# Deploy — the compiled deployment.json carries channel/modality settings.
+# Deploy — the compiled gecx-config.json carries the channel/modality and a
+# `deployment` block (channel_type, modality, widget settings).
 ```
 
 This is the payoff of the **[author once at the center](../guides/polymorphism.md#the-compilation-model)** model: you maintain a single Bella Notte agent, and the channel-specific surfaces fall out of two short adapter files.

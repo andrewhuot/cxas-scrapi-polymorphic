@@ -19,9 +19,11 @@ from pathlib import Path
 
 import pytest
 
-# tests/cxas_scrapi/poly/conftest.py -> tests/
+# tests/cxas_scrapi/poly/conftest.py -> tests/ -> repo root
 _TESTS_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = _TESTS_ROOT.parent
 _BASE_FIXTURE = _TESTS_ROOT / "testdata" / "poly" / "base"
+_BELLA_NOTTE = _REPO_ROOT / "examples" / "bella_notte"
 
 
 @pytest.fixture
@@ -36,3 +38,11 @@ def copied_base(tmp_path: Path) -> Path:
     dest = tmp_path / "base"
     shutil.copytree(_BASE_FIXTURE, dest)
     return dest
+
+
+@pytest.fixture
+def bella_notte_dir() -> Path:
+    """Path to the real Bella Notte example project (a lint-clean base)."""
+    if not (_BELLA_NOTTE / "app.json").exists():
+        pytest.skip("examples/bella_notte not available")
+    return _BELLA_NOTTE

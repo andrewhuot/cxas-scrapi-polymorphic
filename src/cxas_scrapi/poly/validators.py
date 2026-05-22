@@ -12,26 +12,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Adapter card validators (AD001-AD007).
+"""Adapter card validators (AD001-AD010).
 
 Pure local validation run before compilation.  Each function returns a
 list of issue dicts shaped like ``LintResult``: ``{rule_id, severity,
 message, path}``.  These same checks back the ``adapters`` lint rule
-category (see ``utils/lint_rules/adapters.py``).
+category (see ``utils/lint_rules/adapters.py``) and are the **single source
+of truth** the engine relies on — ``engine.compile`` runs them up front so a
+card that validates clean always compiles, and a card that would fail to
+compile is always reported here first.
 
 Note on rule IDs: the original spec proposed ``A001``-``A007`` but those
 collide with the existing ``config`` lint rules, so adapter rules use the
 ``AD`` prefix.
+
+    AD001  schema / required fields
+    AD002  referenced agents exist
+    AD003  replace_section sectionTag present and the section exists
+    AD004  tool remove targets a tool the base agent actually has  (warning)
+    AD005  referenced source missing / tool add has no definition
+    AD006  adapter declares at least one evaluations entry          (warning)
+    AD007  two adapters target the same channel
+    AD008  a referenced path escapes the project root
+    AD009  deployment channelType/modality/theme is a known value
+    AD010  toolDefinitions.toolType is supported
 """
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from cxas_scrapi.poly.models import AdapterCard
+from cxas_scrapi.poly.instructions import has_section
+from cxas_scrapi.poly.models import (
+    CHANNEL_TYPES,
+    MODALITIES,
+    SUPPORTED_TOOL_TYPES,
+    THEMES,
+    AdapterCard,
+)
 
 ERROR = "error"
 WARNING = "warning"
+
+# Runtime-provided tools that are always valid as an agent tool reference,
+# even though they have no directory under ``tools/``.  Mirrors
+# ``cxas_scrapi.utils.linter.LintContext.platform_tools`` — kept local to avoid
+# an import cycle (linter -> lint_rules -> adapters -> validators).
+PLATFORM_TOOLS = frozenset({"end_session", "customize_response"})
 
 
 # ── Filesystem helpers ───────────────────────────────────────────────────
@@ -46,6 +73,23 @@ def _read_json(path: Path) -> Optional[Dict[str, Any]]:
         return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def resolve_within(app_dir: str, ref: str) -> Tuple[Path, bool]:
+    """Resolve an adapter-relative path and report whether it stays in scope.
+
+    Adapter ``sourceDir``/``pythonCode`` references are interpreted relative to
+    the project root (``app_dir``).  Returns ``(resolved_path, is_inside)``
+    where ``is_inside`` is False for absolute paths or anything that escapes the
+    root via ``..`` — the engine and validators both refuse those.
+    """
+    base = Path(app_dir).resolve()
+    candidate = (base / ref).resolve()
+    try:
+        candidate.relative_to(base)
+        return candidate, True
+    except ValueError:
+        return candidate, False
 
 
 def _agent_dir_for(app_dir: str, agent_name: str) -> Optional[Path]:
@@ -110,12 +154,33 @@ def _get_instruction_text(app_dir: str, agent_name: str) -> str:
     return ""
 
 
-def _get_project_tool_names(app_dir: str) -> List[str]:
-    """List all tool display names from the ``tools/`` directory."""
+def _get_project_tool_names(app_dir: str) -> set:
+    """All tool names referenceable in the base project.
+
+    Includes each tool's ``displayName`` (the canonical reference, since agent
+    ``tools`` lists use display names) plus the directory name as a fallback.
+    """
     tools = Path(app_dir) / "tools"
+    names: set = set()
     if not tools.exists():
-        return []
-    return [d.name for d in sorted(tools.iterdir()) if d.is_dir()]
+        return names
+    for d in sorted(tools.iterdir()):
+        if not d.is_dir():
+            continue
+        names.add(d.name)
+        cfg = _read_json(d / f"{d.name}.json")
+        if cfg is None:
+            for cand in d.glob("*.json"):
+                cfg = _read_json(cand)
+                if cfg:
+                    break
+        if cfg and cfg.get("displayName"):
+            names.add(cfg["displayName"])
+    return names
+
+
+def _dir_has_json(path: Path) -> bool:
+    return path.is_dir() and any(path.rglob("*.json"))
 
 
 # ── Validation ───────────────────────────────────────────────────────────
@@ -126,24 +191,28 @@ def validate_adapter_card(
 ) -> List[Dict[str, Any]]:
     """Validate a single adapter card against the project structure.
 
-    Returns a list of issue dicts (may be empty).  Covers AD001-AD006;
-    cross-adapter AD007 is handled by :func:`validate_all_adapters`.
+    Returns a list of issue dicts (may be empty).  Covers AD001-AD006 and
+    AD008-AD010; cross-adapter AD007 is handled by
+    :func:`validate_all_adapters`.
     """
     issues: List[Dict[str, Any]] = []
     channel = adapter.metadata.channel
     where = f"adapters ({channel})"
 
-    # AD001 — required fields / valid types.  The card is already parsed,
-    # so we only assert the channel identifier is non-empty here.
-    if not channel:
+    def add(rule_id: str, severity: str, message: str) -> None:
         issues.append(
             {
-                "rule_id": "AD001",
-                "severity": ERROR,
-                "message": "Adapter metadata.channel must be non-empty.",
+                "rule_id": rule_id,
+                "severity": severity,
+                "message": message,
                 "path": where,
             }
         )
+
+    # AD001 — required fields / valid types.  The card is already parsed, so we
+    # only assert the channel identifier is non-empty here.
+    if not channel:
+        add("AD001", ERROR, "Adapter metadata.channel must be non-empty.")
 
     known_agents = set(_get_agent_display_names(app_dir))
     # Also accept directory names so a card may reference either form.
@@ -153,16 +222,11 @@ def validate_adapter_card(
 
     def check_agent(agent: str, section: str, idx: int) -> bool:
         if agent not in known_agents:
-            issues.append(
-                {
-                    "rule_id": "AD002",
-                    "severity": ERROR,
-                    "message": (
-                        f"Agent '{agent}' referenced in {section}[{idx}] does "
-                        "not exist in agents/ directory"
-                    ),
-                    "path": where,
-                }
+            add(
+                "AD002",
+                ERROR,
+                f"Agent '{agent}' referenced in {section}[{idx}] does not "
+                "exist in agents/ directory",
             )
             return False
         return True
@@ -182,36 +246,25 @@ def validate_adapter_card(
         if diff.mode != "replace_section":
             continue
         if not diff.section_tag:
-            issues.append(
-                {
-                    "rule_id": "AD003",
-                    "severity": ERROR,
-                    "message": (
-                        f"instructionDiffs[{i}] uses replace_section but has "
-                        "no sectionTag"
-                    ),
-                    "path": where,
-                }
+            add(
+                "AD003",
+                ERROR,
+                f"instructionDiffs[{i}] uses replace_section but has no "
+                "sectionTag",
             )
             continue
         if diff.agent not in known_agents:
             continue
         text = _get_instruction_text(app_dir, diff.agent)
-        if f"<{diff.section_tag}>" not in text:
-            issues.append(
-                {
-                    "rule_id": "AD003",
-                    "severity": ERROR,
-                    "message": (
-                        f"Section <{diff.section_tag}> from "
-                        f"instructionDiffs[{i}] not found in instruction for "
-                        f"agent '{diff.agent}'"
-                    ),
-                    "path": where,
-                }
+        if not has_section(text, diff.section_tag):
+            add(
+                "AD003",
+                ERROR,
+                f"Section <{diff.section_tag}> from instructionDiffs[{i}] not "
+                f"found in instruction for agent '{diff.agent}'",
             )
 
-    project_tools = set(_get_project_tool_names(app_dir))
+    project_tools = _get_project_tool_names(app_dir)
     defined_tools = {td.display_name for td in adapter.tool_definitions}
 
     # AD004 — removing a tool not present in the base agent's tools list.
@@ -220,43 +273,134 @@ def validate_adapter_card(
         base_tools = set(_get_agent_tools(app_dir, mod.agent))
         for t in mod.remove:
             if t not in base_tools:
-                issues.append(
-                    {
-                        "rule_id": "AD004",
-                        "severity": WARNING,
-                        "message": (
-                            f"tools[{i}] removes '{t}' which is not in agent "
-                            f"'{mod.agent}' base tools list"
-                        ),
-                        "path": where,
-                    }
+                add(
+                    "AD004",
+                    WARNING,
+                    f"tools[{i}] removes '{t}' which is not in agent "
+                    f"'{mod.agent}' base tools list",
                 )
         for t in mod.add:
-            if t not in project_tools and t not in defined_tools:
-                issues.append(
-                    {
-                        "rule_id": "AD005",
-                        "severity": ERROR,
-                        "message": (
-                            f"tools[{i}] adds '{t}' which has no definition in "
-                            "tools/ and no matching toolDefinitions entry"
-                        ),
-                        "path": where,
-                    }
+            if (
+                t not in project_tools
+                and t not in defined_tools
+                and t not in PLATFORM_TOOLS
+            ):
+                add(
+                    "AD005",
+                    ERROR,
+                    f"tools[{i}] adds '{t}' which has no definition in tools/, "
+                    "no matching toolDefinitions entry, and is not a platform "
+                    "tool",
+                )
+
+    # AD010 — toolDefinitions declare a supported toolType.
+    # AD008/AD005 — toolDefinitions sourceDir is in-scope and present.
+    for i, td in enumerate(adapter.tool_definitions):
+        if td.tool_type not in SUPPORTED_TOOL_TYPES:
+            add(
+                "AD010",
+                ERROR,
+                f"toolDefinitions[{i}] toolType '{td.tool_type}' is not "
+                "supported (expected one of "
+                f"{', '.join(SUPPORTED_TOOL_TYPES)})",
+            )
+        path, inside = resolve_within(app_dir, td.source_dir)
+        if not inside:
+            add(
+                "AD008",
+                ERROR,
+                f"toolDefinitions[{i}] sourceDir '{td.source_dir}' resolves "
+                "outside the project root",
+            )
+        elif not _dir_has_json(path):
+            add(
+                "AD005",
+                ERROR,
+                f"toolDefinitions[{i}] sourceDir '{td.source_dir}' is missing "
+                "or contains no JSON definition",
+            )
+
+    # AD008/AD005 — callback pythonCode is in-scope and present.
+    for i, cb in enumerate(adapter.callbacks):
+        path, inside = resolve_within(app_dir, cb.python_code)
+        if not inside:
+            add(
+                "AD008",
+                ERROR,
+                f"callbacks[{i}] pythonCode '{cb.python_code}' resolves "
+                "outside the project root",
+            )
+        elif not path.is_file():
+            add(
+                "AD005",
+                ERROR,
+                f"callbacks[{i}] pythonCode '{cb.python_code}' was not found "
+                f"for agent '{cb.agent}'",
+            )
+
+    # AD008/AD005 — evaluation/expectation/dataset sourceDirs.
+    for label, refs in (
+        ("evaluations", adapter.evaluations),
+        ("evaluationExpectations", adapter.evaluation_expectations),
+        ("evaluationDatasets", adapter.evaluation_datasets),
+    ):
+        for i, ev in enumerate(refs):
+            path, inside = resolve_within(app_dir, ev.source_dir)
+            if not inside:
+                add(
+                    "AD008",
+                    ERROR,
+                    f"{label}[{i}] sourceDir '{ev.source_dir}' resolves "
+                    "outside the project root",
+                )
+            elif not path.is_dir():
+                add(
+                    "AD005",
+                    ERROR,
+                    f"{label}[{i}] sourceDir '{ev.source_dir}' does not exist",
+                )
+
+    # AD009 — deployment uses known channelType / modality / theme values.
+    dep = adapter.deployment
+    if dep is not None:
+        ct = dep.channel_type
+        if ct is not None and ct not in CHANNEL_TYPES:
+            add(
+                "AD009",
+                ERROR,
+                f"deployment.channelType '{dep.channel_type}' is not one of "
+                f"{', '.join(CHANNEL_TYPES)}",
+            )
+        if dep.modality is not None and dep.modality not in MODALITIES:
+            add(
+                "AD009",
+                ERROR,
+                f"deployment.modality '{dep.modality}' is not one of "
+                f"{', '.join(MODALITIES)}",
+            )
+        wwc = dep.web_widget_config
+        if wwc is not None:
+            if wwc.theme is not None and wwc.theme not in THEMES:
+                add(
+                    "AD009",
+                    ERROR,
+                    f"deployment.webWidgetConfig.theme '{wwc.theme}' is not "
+                    f"one of {', '.join(THEMES)}",
+                )
+            if wwc.modality is not None and wwc.modality not in MODALITIES:
+                add(
+                    "AD009",
+                    ERROR,
+                    f"deployment.webWidgetConfig.modality '{wwc.modality}' is "
+                    f"not one of {', '.join(MODALITIES)}",
                 )
 
     # AD006 — adapter has no evaluations.
     if not adapter.evaluations:
-        issues.append(
-            {
-                "rule_id": "AD006",
-                "severity": WARNING,
-                "message": (
-                    f"Adapter for channel '{channel}' has no evaluations "
-                    "entries"
-                ),
-                "path": where,
-            }
+        add(
+            "AD006",
+            WARNING,
+            f"Adapter for channel '{channel}' has no evaluations entries",
         )
 
     return issues

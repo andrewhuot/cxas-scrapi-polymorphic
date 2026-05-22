@@ -139,3 +139,122 @@ def test_ad007_distinct_channels_ok(base_dir: Path):
     b = _card(metadata={"channel": "voice", "displayName": "Voice"})
     issues = validate_all_adapters([a, b], str(base_dir))
     assert "AD007" not in _ids(issues)
+
+
+def test_ad005_platform_tool_add_ok(base_dir: Path):
+    card = _card(tools=[{"agent": "Test_Agent", "add": ["customize_response"]}])
+    issues = validate_adapter_card(card, str(base_dir))
+    assert "AD005" not in _ids(issues)
+
+
+def test_ad005_missing_callback_source(base_dir: Path):
+    card = _card(
+        callbacks=[
+            {
+                "agent": "Test_Agent",
+                "type": "before_model",
+                "pythonCode": "adapters/chat_callbacks/nope.py",
+            }
+        ]
+    )
+    issues = validate_adapter_card(card, str(base_dir))
+    assert any(
+        i["rule_id"] == "AD005" and "pythonCode" in i["message"] for i in issues
+    )
+
+
+def test_ad005_missing_eval_sourcedir(base_dir: Path):
+    card = _card(evaluations=[{"sourceDir": "adapters/does_not_exist"}])
+    issues = validate_adapter_card(card, str(base_dir))
+    assert any(
+        i["rule_id"] == "AD005" and "evaluations" in i["message"]
+        for i in issues
+    )
+
+
+def test_ad008_path_escapes_project(base_dir: Path):
+    card = _card(
+        callbacks=[
+            {
+                "agent": "Test_Agent",
+                "type": "before_model",
+                "pythonCode": "../../../../etc/passwd",
+            }
+        ]
+    )
+    issues = validate_adapter_card(card, str(base_dir))
+    ad008 = [i for i in issues if i["rule_id"] == "AD008"]
+    assert ad008 and ad008[0]["severity"] == "error"
+
+
+def test_ad009_invalid_channel_type(base_dir: Path):
+    card = _card(deployment={"channelType": "NOT_A_CHANNEL"})
+    issues = validate_adapter_card(card, str(base_dir))
+    assert any(
+        i["rule_id"] == "AD009" and "channelType" in i["message"]
+        for i in issues
+    )
+
+
+def test_ad009_invalid_modality(base_dir: Path):
+    card = _card(deployment={"modality": "SUPER_HD"})
+    issues = validate_adapter_card(card, str(base_dir))
+    assert any(
+        i["rule_id"] == "AD009" and "modality" in i["message"] for i in issues
+    )
+
+
+def test_ad009_valid_deployment_ok(base_dir: Path):
+    card = _card(
+        deployment={
+            "channelType": "WEB_UI",
+            "modality": "CHAT_ONLY",
+            "webWidgetConfig": {"theme": "LIGHT"},
+        }
+    )
+    issues = validate_adapter_card(card, str(base_dir))
+    assert "AD009" not in _ids(issues)
+
+
+def test_ad010_unsupported_tool_type(base_dir: Path):
+    card = _card(
+        tools=[{"agent": "Test_Agent", "add": ["x"]}],
+        toolDefinitions=[
+            {
+                "displayName": "x",
+                "toolType": "wasm",
+                "sourceDir": "adapters/chat_tools/extra_tool",
+            }
+        ],
+    )
+    issues = validate_adapter_card(card, str(base_dir))
+    assert any(
+        i["rule_id"] == "AD010" and "wasm" in i["message"] for i in issues
+    )
+
+
+def test_replace_section_with_attributes_passes(copied_base: Path):
+    inst = copied_base / "agents" / "Test_Agent" / "instruction.txt"
+    inst.write_text(
+        inst.read_text().replace(
+            "<channel_behavior>", '<channel_behavior priority="high">'
+        )
+    )
+    card = AdapterCard.model_validate(
+        {
+            "apiVersion": "v1",
+            "kind": "ChannelAdapter",
+            "metadata": {"channel": "chat", "displayName": "Chat"},
+            "instructionDiffs": [
+                {
+                    "agent": "Test_Agent",
+                    "mode": "replace_section",
+                    "sectionTag": "channel_behavior",
+                    "content": "x",
+                }
+            ],
+            "evaluations": [{"sourceDir": "adapters/chat_evals"}],
+        }
+    )
+    issues = validate_adapter_card(card, str(copied_base))
+    assert "AD003" not in _ids(issues)
