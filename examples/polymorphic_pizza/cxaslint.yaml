@@ -1,0 +1,9 @@
+# cxaslint.yaml — Polymorphic Pizza linter configuration
+
+app_dir: .
+
+rules:
+  # These two are style conventions that don't fit this small demo (the same
+  # rules are disabled in the Bella Notte example):
+  T001: "off"  # agent_action error-return pattern — demo tools return {"error": ...}
+  T004: "off"  # helper function name need not match the tool directory name

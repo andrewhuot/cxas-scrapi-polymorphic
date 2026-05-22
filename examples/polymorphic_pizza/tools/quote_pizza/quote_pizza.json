@@ -1,0 +1,9 @@
+{
+  "name": "4d287fca-08dd-4c99-bc34-e22e51f8f3e9",
+  "displayName": "quote_pizza",
+  "pythonFunction": {
+    "name": "quote_pizza",
+    "pythonCode": "tools/quote_pizza/python_function/python_code.py",
+    "description": "Calculate the price of a single pizza. Pass the size ('small', 'medium', or 'large') and a comma-separated list of toppings (may be empty). Returns the base price, topping count, and the total."
+  }
+}

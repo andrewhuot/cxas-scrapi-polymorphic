@@ -1,0 +1,9 @@
+{
+  "name": "5d8674c1-955b-406e-9db8-46f1d4db79ea",
+  "displayName": "get_menu",
+  "pythonFunction": {
+    "name": "get_menu",
+    "pythonCode": "tools/get_menu/python_function/python_code.py",
+    "description": "Return the Polymorphic Pizza menu: pizza sizes and their base prices, a few specialty pizzas, the list of available toppings, and the per-topping price. Use this whenever the customer asks what is available or how much something costs."
+  }
+}
