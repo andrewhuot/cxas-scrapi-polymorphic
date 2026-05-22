@@ -55,3 +55,18 @@ def polymorphic_pizza_dir() -> Path:
     if not (_POLYMORPHIC_PIZZA / "app.json").exists():
         pytest.skip("examples/polymorphic_pizza not available")
     return _POLYMORPHIC_PIZZA
+
+
+@pytest.fixture
+def copied_pizza_with_identity(
+    tmp_path: Path, polymorphic_pizza_dir: Path
+) -> Path:
+    """Pizza demo copy whose chat adapter sets an explicit appIdentity."""
+    dst = tmp_path / "pizza"
+    shutil.copytree(polymorphic_pizza_dir, dst)
+    card = dst / "adapters" / "chat.adapter.yaml"
+    card.write_text(
+        card.read_text()
+        + "\nappIdentity:\n  displayName: Override Chat Name\n"
+    )
+    return dst
