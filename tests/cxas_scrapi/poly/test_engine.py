@@ -219,7 +219,9 @@ def test_deployment_voice_sets_audio_modality(base_dir: Path):
     assert compiled.gecx_config["modality"] == "audio"
 
 
-def test_gecx_config_overlay_deep_merges_before_channel_defaults(copied_base: Path):
+def test_gecx_config_overlay_deep_merges_before_channel_defaults(
+    copied_base: Path,
+):
     card = AdapterCard.model_validate(
         {
             "apiVersion": "v1",

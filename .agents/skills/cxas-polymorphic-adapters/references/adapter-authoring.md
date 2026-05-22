@@ -32,7 +32,26 @@ Get clear on:
 - Whether the channel delta is small enough for an adapter, instead of a fully
   separate agent
 
-### 2. Start from the required card skeleton
+### 2. Start from `cxas poly init` when possible
+
+For a new channel, let the CLI write the first valid card and referenced
+starter assets:
+
+```bash
+uv run cxas poly init \
+  --app-dir <app_dir> \
+  --channel chat \
+  --deployment-target WEB_UI \
+  --modality CHAT_ONLY \
+  --with-callback before_model \
+  --with-tool send_channel_card
+```
+
+Use `--dry-run` before writing and `--force` only when replacing known scaffold
+files. The generated adapter uses only currently supported fields; replace the
+starter instruction/eval/tool/callback content with real channel behavior.
+
+### 3. Or start from the required card skeleton
 
 ```yaml
 apiVersion: poly.cxas.dev/v1
@@ -58,7 +77,7 @@ named `*.adapter.yaml`, `*.adapter.yml`, or `*.adapter.json` under `adapters/`.
 `metadata.channel` becomes the output directory name and generated deployment
 id.
 
-### 3. Write instruction diffs
+### 4. Write instruction diffs
 
 Prefer `append` for channel behavior because it keeps the base readable and the
 delta small:
@@ -94,7 +113,7 @@ Channel-specific guidance:
 
 If most sections want `replace_section`, recommend separate agents.
 
-### 4. Add tool modifications and channel-only tools
+### 5. Add tool modifications and channel-only tools
 
 `tools.add` may reference:
 
@@ -124,7 +143,7 @@ and the referenced code. The compiler normalizes the code to
 For OpenAPI tools, use `toolType: openapi`; the engine copies the source
 folder verbatim.
 
-### 5. Add callbacks when the channel needs runtime hints
+### 6. Add callbacks when the channel needs runtime hints
 
 Supported callback types:
 
@@ -149,7 +168,7 @@ Callback paths are relative to the app root. The compiler appends the callback
 after existing callbacks of that type and writes it into the agent's standard
 callback directory in compiled output.
 
-### 6. Add channel evals
+### 7. Add channel evals
 
 Every behavior-changing adapter should usually add channel eval coverage:
 
@@ -162,7 +181,7 @@ The same source-dir structure also applies to `evaluationExpectations` and
 `evaluationDatasets`. If `evaluations` is missing, validation reports `AD006`
 warning.
 
-### 7. Set deployment values
+### 8. Set deployment values
 
 Chat example:
 
@@ -212,7 +231,9 @@ The compiler stores the resolved deployment block in compiled
 
 ```bash
 uv run cxas poly validate --app-dir <app_dir>
+uv run cxas poly doctor --app-dir <app_dir>
 uv run cxas poly diff <channel> --app-dir <app_dir>
+uv run cxas poly diff <channel> --app-dir <app_dir> --json
 uv run cxas poly build --app-dir <app_dir> --output-dir <output_dir>
 uv run cxas lint --app-dir <output_dir>/<channel>
 ```

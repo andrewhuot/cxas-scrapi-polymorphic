@@ -100,10 +100,14 @@ uv sync --extra dev
 # 2. Validate the demo's two channel adapters:
 uv run cxas poly validate --app-dir examples/polymorphic_pizza
 
-# 3. Compile the base project into a chat agent and a voice agent:
+# 3. Preview a channel delta in either human or JSON form:
+uv run cxas poly diff chat --app-dir examples/polymorphic_pizza
+uv run cxas poly diff chat --app-dir examples/polymorphic_pizza --json
+
+# 4. Compile the base project into a chat agent and a voice agent:
 uv run cxas poly build --app-dir examples/polymorphic_pizza --output-dir ./output
 
-# 4. The output is just a normal project — lint it like any other:
+# 5. The output is just a normal project — lint it like any other:
 uv run cxas lint --app-dir ./output/chat
 uv run cxas lint --app-dir ./output/voice
 ```
@@ -113,6 +117,8 @@ visual order card, deployed to a web widget) and `voice/` (short spoken turns,
 deployed to telephony) — both generated from the **same** `agents/`, `tools/`,
 and `evaluations/`. Want to preview the per-channel changes before building? Run
 `uv run cxas poly diff chat --app-dir examples/polymorphic_pizza` (or `voice`).
+If validation fails, `uv run cxas poly doctor --app-dir examples/polymorphic_pizza`
+prints the same AD rule IDs with field paths and likely fixes.
 
 Full file-by-file walkthrough, a chat-vs-voice comparison, and what to try next:
 **[examples/polymorphic_pizza/README.md](examples/polymorphic_pizza/README.md)**.
@@ -132,7 +138,7 @@ The library is organized by responsibility. Each top-level package under
 |---|---|
 | [`core/`](src/cxas_scrapi/core) | High-level building blocks mapped to CXAS resource types — `Apps`, `Agents`, `Tools`, `Guardrails`, `Deployments`, `Sessions`, etc. The main public SDK surface. |
 | [`poly/`](src/cxas_scrapi/poly) | **The polymorphism engine** — adapter-card models, validators, and the compiler. Pure local file I/O; intentionally **GCP-free** (no `google.cloud.*` imports, no network). |
-| [`cli/`](src/cxas_scrapi/cli) | The `cxas` command line. `cli/poly_cli.py` wires up `cxas poly build / validate / diff`. |
+| [`cli/`](src/cxas_scrapi/cli) | The `cxas` command line. `cli/poly_cli.py` wires up `cxas poly init / build / validate / doctor / diff`. |
 | [`evals/`](src/cxas_scrapi/evals) | Executing and analyzing agent evaluations — goldens, simulations, latency. |
 | [`utils/`](src/cxas_scrapi/utils) | Pagination, proto/response flattening, linting, Sheets/GCS integrations. |
 | [`migration/`](src/cxas_scrapi/migration) | Tools for migrating legacy Dialogflow CX agents into CXAS. |
@@ -236,7 +242,27 @@ examples/bella_notte/
 Write the base instructions to be **channel-neutral**: describe *what* the agent
 does, not *how* it should look on a screen or sound on a call.
 
-### 2. Write a channel adapter card
+### 2. Scaffold a starter adapter when adding a new channel
+
+If you are starting from an existing base app, `init` creates a valid starter
+card and any referenced eval/tool/callback files:
+
+```bash
+cxas poly init \
+  --app-dir examples/bella_notte \
+  --channel sms \
+  --deployment-target TWILIO \
+  --modality VOICE_ONLY \
+  --with-callback before_model
+```
+
+By default, `init` includes a starter eval so validation does not immediately
+warn about missing channel coverage. Use `--dry-run` to inspect planned files or
+`--no-eval` for a non-behavioral adapter. The generated content is intentionally
+plain: replace it with real channel-specific instructions, evals, and runtime
+hooks before shipping.
+
+### 3. Write a channel adapter card
 
 An adapter card is a short declaration of deltas. Here is the voice adapter,
 annotated:
@@ -281,7 +307,7 @@ numbered lists, and an extra `send_rich_card` tool. See
 [`chat.adapter.yaml`](examples/bella_notte/adapters/chat.adapter.yaml) for the
 full version, which also demonstrates `tools` + `toolDefinitions`.
 
-### 3. Validate before you build
+### 4. Validate before you build
 
 ```bash
 cxas poly validate --app-dir examples/bella_notte
@@ -295,12 +321,26 @@ Validation checks that every referenced agent/tool/section actually exists, that
 no two cards claim the same channel, and more — see
 [Validation rules](#validation-rules).
 
-### 4. Preview the changes with `diff`
+When a card is not valid yet, use the guided form:
 
-`diff` shows exactly what an adapter will change, **without writing anything**:
+```bash
+cxas poly doctor --app-dir examples/bella_notte
+# or
+cxas poly validate --app-dir examples/bella_notte --explain
+```
+
+Doctor reuses the same validators, then adds what failed, why it matters, which
+adapter field or referenced path to inspect, and a likely fix shape.
+
+### 5. Preview the changes with `diff`
+
+`diff` shows exactly what an adapter will change, **without writing anything**.
+The human output is for review, and `--json` emits a stable `poly-diff/v1`
+report for CI/tooling:
 
 ```bash
 cxas poly diff chat --app-dir examples/bella_notte
+cxas poly diff chat --app-dir examples/bella_notte --json
 ```
 
 ```
@@ -335,7 +375,7 @@ gecx-config.json (deployment)
   + web_widget_title: Bella Notte Reservations
 ```
 
-### 5. Build the channels
+### 6. Build the channels
 
 ```bash
 cxas poly build --app-dir examples/bella_notte --output-dir ./output
@@ -348,7 +388,7 @@ Compiled channel 'voice' -> ./output/voice
 Done. 2 channel(s) written to ./output
 ```
 
-### 6. Lint, evaluate, and deploy — the output is "just a project"
+### 7. Lint, evaluate, and deploy — the output is "just a project"
 
 The single most important property of the engine: **the compiled output is
 indistinguishable from a hand-authored project.** Every existing command works on

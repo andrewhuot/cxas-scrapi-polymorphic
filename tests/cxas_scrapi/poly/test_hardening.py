@@ -79,7 +79,10 @@ def test_polymorphic_pizza_showcases_channel_specific_runtime_config(
 
     assert chat.gecx_config["model"] == "gemini-3-pro"
     assert chat.gecx_config["modality"] == "text"
-    assert chat.agents["Order_Agent"]["modelSettings"]["model"] == "gemini-3-pro"
+    assert (
+        chat.agents["Order_Agent"]["modelSettings"]["model"]
+        == "gemini-3-pro"
+    )
     assert "send_order_card" in chat.agents["Order_Agent"]["tools"]
 
     assert voice.gecx_config["model"] == "gemini-3-flash"

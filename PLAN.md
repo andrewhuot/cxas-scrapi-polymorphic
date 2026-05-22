@@ -1,89 +1,138 @@
 # PLAN.md
 
 ## Goal
-Review and improve the polymorphic agent architecture so the Canonical Agent Card/root app, Channel Adapter Cards, Polymorphism Engine, and channel-specific runtime configs match the product proposal and the Polymorphic Pizza demo proves the end-to-end workflow.
+Implement the first wave of polymorphic-agent developer experience improvements:
+`cxas poly init` scaffolding, guided validation diagnostics via `doctor` and
+`validate --explain`, and stable `cxas poly diff --json` output with clearer
+human review output.
 
 ## Context
-- Product proposal: `/Users/andrew/Downloads/Polymorphic_Agent_Architecture_Product_Proposal.md`
-- Recent polymorphism commits inspected with local timestamps from May 21, 2026:
-  - `dad1236` / `a6e7d15` — initial Polymorphism Engine and Bella Notte adapters
-  - `bcd017d` — Polymorphic Pizza chat + voice demo
-  - `0264160` / `1d8252a` — production hardening pass
+- Current branch/worktree: `feat/poly-first-wave-codex` in
+  `/Users/andrew/Desktop/cxas-scrapi-polymorphic-codex-first-wave`.
+- Base behavior is build-time polymorphism only: base project plus
+  `adapters/*.adapter.yaml` compiles to ordinary SCRAPI projects.
 - Core implementation:
+  - `src/cxas_scrapi/cli/poly_cli.py`
   - `src/cxas_scrapi/poly/models.py`
   - `src/cxas_scrapi/poly/engine.py`
-  - `src/cxas_scrapi/poly/instructions.py`
   - `src/cxas_scrapi/poly/validators.py`
-  - `src/cxas_scrapi/cli/poly_cli.py`
   - `src/cxas_scrapi/utils/lint_rules/adapters.py`
-- Demo project:
-  - `examples/polymorphic_pizza/app.json`
-  - `examples/polymorphic_pizza/gecx-config.json`
-  - `examples/polymorphic_pizza/adapters/chat.adapter.yaml`
-  - `examples/polymorphic_pizza/adapters/voice.adapter.yaml`
-  - `examples/polymorphic_pizza/agents/**`
-  - `examples/polymorphic_pizza/tools/**`
-  - `examples/polymorphic_pizza/evaluations/**`
+- Existing docs and examples:
+  - `README.md`
+  - `docs/cli/poly.md`
+  - `docs/guides/polymorphism.md`
+  - `docs/patterns/polymorphism.md`
+  - `examples/polymorphic_pizza/**`
+  - `examples/bella_notte/**`
 - Existing tests:
-  - `tests/cxas_scrapi/poly/test_engine.py`
   - `tests/cxas_scrapi/poly/test_models.py`
   - `tests/cxas_scrapi/poly/test_validators.py`
+  - `tests/cxas_scrapi/poly/test_engine.py`
   - `tests/cxas_scrapi/poly/test_hardening.py`
   - `tests/cxas_scrapi/poly/test_adapter_lint_rules.py`
 
 ## Constraints
-- Preserve existing `cxas poly` CLI behavior unless a change is required to fulfill the product architecture.
-- Prefer small, additive, testable refactors.
-- Do not edit unrelated files.
-- Treat compiled channel output as a generated artifact, not a source of truth.
-- Channel adapters must express deltas from the canonical app, not duplicate full agent definitions.
-- Runtime configs must remain compatible with existing SCRAPI lint/build/deploy workflows.
+- Do not fetch, pull, or push.
+- Preserve existing `cxas poly build`, `validate`, `diff`, and adapter-rule
+  behavior unless extending it intentionally.
+- Do not invent runtime polymorphism or unsupported adapter-card fields.
+- Keep emitted scaffolded paths valid under current validators and compiler.
+- Prefer shared helpers and explicit data shapes over CLI-only string handling.
+- Avoid unrelated churn and generated output in the repo.
 
 ## Milestones
 
-### Milestone 1 — Understand and de-risk
-Review the proposal, recent commits, current poly module, linter rules, docs, and Polymorphic Pizza assets. Identify gaps between the product vision and implementation. Verify current behavior with targeted tests and `cxas poly` commands.
+### Milestone 1 - Understand And Plan
+Read the requested docs/examples/source, refresh prior polymorphism memory, and
+replace this plan with the first-wave implementation checklist.
 
-### Milestone 2 — Implement architecture fixes
-Make focused changes where the implementation currently falls short. Expected areas include deterministic runtime config merge behavior, adapter validation, root agent/app-card treatment, compiled output cleanliness, and demo adapters that visibly demonstrate channel-specific depth.
+### Milestone 2 - Shared DX Helpers
+Add reusable helper modules for scaffold planning/writing, validation
+explanations, and diff report generation. Keep business validation in
+`validators.py` and compilation in `engine.py`.
 
-### Milestone 3 — Harden and verify
-Add or update tests for every behavior change. Build and lint the Polymorphic Pizza chat and voice outputs. Update docs or demo instructions only when needed to match the verified workflow.
+### Milestone 3 - CLI Surface
+Wire helpers into:
+- `cxas poly init` with non-interactive flags and prompt fallback.
+- `cxas poly doctor` and `cxas poly validate --explain`.
+- `cxas poly diff --json` plus improved text rendering.
+
+### Milestone 4 - Tests, Docs, Examples
+Add targeted tests for scaffold output, doctor/explain output, and diff JSON.
+Update CLI docs, guide/pattern docs, README, and example walkthroughs where the
+new commands materially improve the workflow.
+
+### Milestone 5 - Verification And Cleanup
+Run targeted tests and real example commands, check formatting/diff cleanliness,
+and optionally commit the intended changes with a conventional commit.
 
 ## Verification Commands
-Run these from the repo root unless noted otherwise.
+Run from the repo root.
 
 ```bash
-uv run pytest tests/cxas_scrapi/poly -q
-uv run cxas poly validate --app-dir examples/polymorphic_pizza
-uv run cxas poly diff chat --app-dir examples/polymorphic_pizza
-uv run cxas poly diff voice --app-dir examples/polymorphic_pizza
-uv run cxas poly build --app-dir examples/polymorphic_pizza --output-dir /tmp/polymorphic_pizza_build
-uv run cxas lint --app-dir /tmp/polymorphic_pizza_build/chat
-uv run cxas lint --app-dir /tmp/polymorphic_pizza_build/voice
+git diff --check
+uv run --with-editable . --with alive-progress pytest tests/cxas_scrapi/poly -q
+uv run --with-editable . --with alive-progress cxas poly init --app-dir /tmp/poly-init-smoke --channel chat --deployment-target WEB_UI --modality CHAT_ONLY --with-tool send_channel_card --with-callback before_model --force
+uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte
+uv run --with-editable . --with alive-progress cxas poly doctor --app-dir examples/bella_notte
+uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte --json
+uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_first_wave_build
+uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_first_wave_build/chat
+uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_first_wave_build/voice
 ```
 
+For the `init` smoke, first create `/tmp/poly-init-smoke` from the committed
+test fixture or another direct app project before running the command.
+
 ## Acceptance Criteria
-- The code review identifies concrete architecture/product-fit risks with file and line references.
-- The final implementation keeps the canonical project as the source of truth and applies channel adapters as auditable deltas.
-- Chat output contains chat-specific runtime config, tools, callbacks, instructions, and evals.
-- Voice output contains voice-specific runtime config, callbacks, instructions, and evals without chat-only tools or formatting.
-- The Polymorphic Pizza demo validates, builds, and produces lint-clean channel outputs.
-- Targeted polymorphism tests pass.
+- A developer can scaffold one or more adapter cards plus referenced starter
+  eval/tool/callback files from an existing direct SCRAPI app.
+- Scaffolded adapter cards use only fields supported by current
+  `AdapterCard` models and validate under current rules.
+- Validation diagnostics explain what failed, why, where to look, and a likely
+  fix shape without forking validator business logic.
+- `cxas poly diff --json` emits a stable, machine-readable v1 report for CI and
+  tools, while text diff remains readable for humans.
+- Docs and examples describe the new first-wave workflow accurately.
+- The full `tests/cxas_scrapi/poly` suite and real example validation/build/lint
+  checks pass.
 
 ## Progress
-- [x] Milestone 1 started: proposal, recent commits, and demo README inspected.
-- [x] Milestone 1 complete: identified duplicate-channel validation loss, unknown-field drift risk, and missing channel runtime config overlay.
-- [x] Milestone 2 complete: implemented strict adapter models, preserved all adapter cards for cross-card validation, added `gecxConfig` deep merge, and updated the Pizza demo adapters.
-- [x] Milestone 3 complete: added regression tests, updated docs, built the Pizza chat/voice outputs, and linted both compiled projects.
+- [x] Milestone 1 complete
+- [x] Milestone 2 complete
+- [x] Milestone 3 complete
+- [x] Milestone 4 complete
+- [x] Milestone 5 complete
 
 ## Decision Log
-- 2026-05-22 00:00 — Treat May 21 local commit timestamps as the polymorphism work "committed today" because the repo log shows all relevant polymorphism commits in that local evening window while the session date is May 22, 2026.
-- 2026-05-22 00:00 — Use the Polymorphic Pizza example as the primary product validation target because the proposal says the example should be the main mechanism for communicating and validating the architecture.
-- 2026-05-22 00:00 — Reject unknown adapter fields with Pydantic `extra="forbid"` so adapter deltas stay auditable and typo-safe.
-- 2026-05-22 00:00 — Preserve the full ordered adapter-card list separately from the channel lookup map so duplicate channel adapters are validated instead of overwritten.
-- 2026-05-22 00:00 — Add `gecxConfig` as a deep-merged adapter delta for channel-specific runtime defaults while keeping compiler-owned `default_channel`, `app_dir`, and deployment-derived modality deterministic.
+- 2026-05-22 00:23 - Keep polymorphism strictly build-time and expose new DX
+  through local CLI/helper modules only; no runtime behavior or deploy behavior
+  changes are in scope.
+- 2026-05-22 00:23 - Add `doctor` as the clearer guided-debug command while
+  also supporting `validate --explain` for users who naturally start from
+  validation.
+- 2026-05-22 00:23 - Put stable diff data behind a shared report builder, then
+  render both text and JSON from that report so CI and humans see the same
+  underlying deltas.
+- 2026-05-22 01:05 - Keep `cxas poly init` scaffold defaults conservative:
+  known chat/web/voice/telephony/api channels get deployment defaults, unknown
+  channel ids stay valid but do not invent deployment fields.
+- 2026-05-22 01:05 - Reverted unrelated `uv.lock` churn from `uv run`; the
+  first-wave implementation does not need dependency changes.
 
 ## Notes / Blockers
-- Verification used `/tmp/polymorphic_pizza_build_codex` as the generated output directory.
+- Verification completed:
+  - `git diff --check`
+  - `uv run --with-editable . --with alive-progress ruff check src/cxas_scrapi/poly src/cxas_scrapi/cli/poly_cli.py tests/cxas_scrapi/poly`
+  - `uv run --with-editable . --with alive-progress pytest tests/cxas_scrapi/poly -q` (85 passed, 1 existing pytest config warning)
+  - `uv run --with-editable . --with alive-progress cxas poly init --app-dir /tmp/cxas_poly_init_smoke_codex --channel sms --deployment-target TWILIO --modality VOICE_ONLY --with-tool send_sms_card --with-callback before_model`
+  - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir /tmp/cxas_poly_init_smoke_codex` (0 errors, 1 pre-existing fixture warning from the original voice adapter)
+  - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte`
+  - `uv run --with-editable . --with alive-progress cxas poly doctor --app-dir examples/bella_notte`
+  - `uv run --with-editable . --with alive-progress cxas poly validate --app-dir examples/bella_notte --explain`
+  - `uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte`
+  - `uv run --with-editable . --with alive-progress cxas poly diff chat --app-dir examples/bella_notte --json`
+  - `uv run --with-editable . --with alive-progress cxas poly build --app-dir examples/bella_notte --output-dir /tmp/poly_first_wave_build`
+  - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_first_wave_build/chat`
+  - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_first_wave_build/voice`
 - No blockers.

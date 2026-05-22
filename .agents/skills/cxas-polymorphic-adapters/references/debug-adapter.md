@@ -180,22 +180,30 @@ into the base and keep adapters focused on channel deltas.
 
 ## Debugging Workflow
 
-1. Run structured validation:
+1. Run guided validation:
+
+```bash
+uv run cxas poly doctor --app-dir <app_dir>
+```
+
+2. Run structured validation when a script/tool needs JSON:
 
 ```bash
 uv run cxas poly validate --app-dir <app_dir> --format json
+uv run cxas poly validate --app-dir <app_dir> --explain --format json
 ```
 
-2. Fix issues by rule ID.
-3. Re-run validation until clean.
-4. Preview the delta:
+3. Fix issues by rule ID at the source adapter/base files.
+4. Re-run validation until clean.
+5. Preview the delta:
 
 ```bash
 uv run cxas poly diff <channel> --app-dir <app_dir>
+uv run cxas poly diff <channel> --app-dir <app_dir> --json
 ```
 
-5. Build and lint compiled output.
-6. Compare compiled files to the intended behavior.
+6. Build and lint compiled output.
+7. Compare compiled files to the intended behavior.
 
 ## Compiled Output Inspection
 

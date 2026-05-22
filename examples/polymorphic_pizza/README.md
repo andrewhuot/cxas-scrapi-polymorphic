@@ -90,13 +90,25 @@ uv run cxas poly validate --app-dir examples/polymorphic_pizza
 All 2 adapter card(s) valid.
 ```
 
+If you break an adapter while experimenting, use doctor for the actionable
+version of the same validation:
+
+```bash
+uv run cxas poly doctor --app-dir examples/polymorphic_pizza
+# or
+uv run cxas poly validate --app-dir examples/polymorphic_pizza --explain
+```
+
 ### 2. Preview what each channel changes
 
 `diff` shows exactly what an adapter will do — **without writing any files**.
+Use the default text form for review and `--json` when a script or CI job needs
+stable fields.
 
 ```bash
 uv run cxas poly diff chat  --app-dir examples/polymorphic_pizza
 uv run cxas poly diff voice --app-dir examples/polymorphic_pizza
+uv run cxas poly diff chat  --app-dir examples/polymorphic_pizza --json
 ```
 
 For **chat** you'll see the `Order_Agent` gain a `send_order_card` tool, a chat
@@ -171,6 +183,22 @@ Make a change once and watch it appear in both channels:
 
 Or tweak just one channel by editing `adapters/chat.adapter.yaml` (for example,
 change `webWidgetTitle`) and rebuild — only the chat output changes.
+
+To start a new channel from this same base app, scaffold the first pass:
+
+```bash
+uv run cxas poly init \
+  --app-dir examples/polymorphic_pizza \
+  --channel sms \
+  --deployment-target TWILIO \
+  --modality VOICE_ONLY \
+  --with-callback before_model \
+  --with-tool send_sms_card
+```
+
+That creates `adapters/sms.adapter.yaml`, a starter SMS eval, a starter callback,
+and a channel-only tool folder. Replace the generated placeholder behavior with
+real SMS-specific UX before building.
 
 ---
 

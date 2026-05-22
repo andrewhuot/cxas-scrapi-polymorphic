@@ -175,9 +175,15 @@ Load `references/debug-adapter.md` for cause and fix guidance.
    non-goals.
 4. Keep the base channel-neutral. Put channel-specific language, rich UI,
    telephony pacing, or API-specific behavior in adapters.
-5. Add or update `adapters/<channel>.adapter.yaml`.
-6. Validate first, then diff, then build, then lint the compiled output.
-7. Debug adapter rule IDs at the source adapter/base files, not by editing the
+5. Add or update `adapters/<channel>.adapter.yaml`. For a new channel, start
+   with `cxas poly init` so referenced eval/tool/callback paths are created
+   with the card.
+6. Validate first. Use `cxas poly doctor` or `validate --explain` when raw AD
+   rule output is not actionable enough.
+7. Diff before writing. Use `cxas poly diff <channel> --json` when CI or tools
+   need stable machine-readable deltas.
+8. Build, then lint the compiled output.
+9. Debug adapter rule IDs at the source adapter/base files, not by editing the
    compiled output.
 
 ## Required Commands
@@ -185,13 +191,18 @@ Load `references/debug-adapter.md` for cause and fix guidance.
 Use `uv run` from the repo root unless the environment has an activated venv.
 
 ```bash
+uv run cxas poly init --app-dir <app_dir> --channel <channel>
 uv run cxas poly validate --app-dir <app_dir>
+uv run cxas poly doctor --app-dir <app_dir>
 uv run cxas poly diff <channel> --app-dir <app_dir>
+uv run cxas poly diff <channel> --app-dir <app_dir> --json
 uv run cxas poly build --app-dir <app_dir> --output-dir <output_dir>
 uv run cxas lint --app-dir <output_dir>/<channel>
 ```
 
-When warnings must block, use `--strict` on `validate` and `build`.
+When warnings must block, use `--strict` on `validate`, `doctor`, and `build`.
+`init` writes only fields supported by the current `AdapterCard` schema and
+creates referenced starter eval/tool/callback files when requested.
 
 ## Python API Quick Reference
 

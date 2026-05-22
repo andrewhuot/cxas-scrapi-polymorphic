@@ -27,7 +27,15 @@ uv run cxas poly validate --app-dir <app_dir>
 Useful options:
 
 - `--format json` for structured output
+- `--explain` for guided what/why/path/fix output
 - `--strict` when warnings should block
+
+Use doctor when debugging:
+
+```bash
+uv run cxas poly doctor --app-dir <app_dir>
+uv run cxas poly doctor --app-dir <app_dir> --format json
+```
 
 `cxas lint` also discovers `adapters/*.adapter.{yaml,yml,json}` and delegates
 to the same rule IDs. In zero-warning workspaces, treat adapter warnings as
@@ -40,6 +48,7 @@ Preview what a channel changes before writing output:
 ```bash
 uv run cxas poly diff chat --app-dir <app_dir>
 uv run cxas poly diff voice --app-dir <app_dir>
+uv run cxas poly diff chat --app-dir <app_dir> --json
 ```
 
 Use the diff to verify:
@@ -148,7 +157,9 @@ For a fast example smoke:
 
 ```bash
 uv run cxas poly validate --app-dir examples/polymorphic_pizza
+uv run cxas poly doctor --app-dir examples/polymorphic_pizza
 uv run cxas poly diff chat --app-dir examples/polymorphic_pizza
+uv run cxas poly diff chat --app-dir examples/polymorphic_pizza --json
 uv run cxas poly build --app-dir examples/polymorphic_pizza --output-dir .tmp-poly-output
 uv run cxas lint --app-dir .tmp-poly-output/chat
 uv run cxas lint --app-dir .tmp-poly-output/voice
@@ -158,10 +169,15 @@ Clean temporary output after inspection if it is not part of the task.
 
 ## Typical Workflow
 
-1. `uv run cxas poly validate --app-dir <app_dir>`
-2. `uv run cxas poly diff <channel> --app-dir <app_dir>`
-3. `uv run cxas poly build --app-dir <app_dir> --output-dir <output_dir>`
-4. `uv run cxas lint --app-dir <output_dir>/<channel>`
-5. Inspect compiled instructions, tools, evals, and deployment config
-6. Hand the compiled project to `cxas-agent-foundry` if the user now wants
+1. `uv run cxas poly init --app-dir <app_dir> --channel <channel>` for a new
+   channel
+2. `uv run cxas poly validate --app-dir <app_dir>`
+3. `uv run cxas poly doctor --app-dir <app_dir>` if validation is not clear
+4. `uv run cxas poly diff <channel> --app-dir <app_dir>`
+5. `uv run cxas poly diff <channel> --app-dir <app_dir> --json` when CI/tooling
+   needs stable deltas
+6. `uv run cxas poly build --app-dir <app_dir> --output-dir <output_dir>`
+7. `uv run cxas lint --app-dir <output_dir>/<channel>`
+8. Inspect compiled instructions, tools, evals, and deployment config
+9. Hand the compiled project to `cxas-agent-foundry` if the user now wants
    eval, push, or broader lifecycle work

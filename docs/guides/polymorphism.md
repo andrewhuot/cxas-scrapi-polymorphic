@@ -56,6 +56,36 @@ Each adapter applies, in order:
 
 ---
 
+## Starting a new adapter
+
+Use `cxas poly init` when you already have a channel-neutral base app and want a
+valid starter workflow for a new channel:
+
+```bash
+cxas poly init \
+  --app-dir examples/polymorphic_pizza \
+  --channel sms \
+  --deployment-target TWILIO \
+  --modality VOICE_ONLY \
+  --with-callback before_model \
+  --with-tool send_sms_card
+```
+
+The scaffold flow creates only supported adapter-card fields:
+
+- `adapters/<channel>.adapter.yaml`
+- a starter `adapters/<channel>_evals/` directory unless `--no-eval` is used
+- optional `adapters/<channel>_callbacks/*.py` files referenced by `callbacks`
+- optional `adapters/<channel>_tools/<tool>/` folders referenced by
+  `toolDefinitions`
+
+`init` refuses to overwrite existing files unless `--force` is passed. Use
+`--dry-run` to see the planned files first. The generated text is a starter, not
+production behavior; replace it with real channel instructions, eval assertions,
+tool descriptions, and callback logic.
+
+---
+
 ## Why the output is "just a project"
 
 The single most important property of the engine: **the compiled output is indistinguishable from a hand-authored SCRAPI project.** Every base file appears in the output with its modifications applied; nothing is left in a half-compiled state.
@@ -93,4 +123,4 @@ A good rule of thumb: if you find yourself using `replace_section` on most secti
 ## Next steps
 
 - **[Polymorphism Pattern](../patterns/polymorphism.md)** — a step-by-step walkthrough of the Bella Notte chat and voice adapters.
-- **[`cxas poly` CLI reference](../../cli/poly.md)** — `build`, `validate`, and `diff`.
+- **[`cxas poly` CLI reference](../cli/poly.md)** — `init`, `build`, `validate`, `doctor`, and `diff --json`.

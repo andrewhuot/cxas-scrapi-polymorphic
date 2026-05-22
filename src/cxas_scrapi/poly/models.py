@@ -205,7 +205,9 @@ class AdapterCard(BaseModel):
     evaluation_datasets: List[EvalReference] = Field(
         default_factory=list, alias="evaluationDatasets"
     )
-    gecx_config: Dict[str, Any] = Field(default_factory=dict, alias="gecxConfig")
+    gecx_config: Dict[str, Any] = Field(
+        default_factory=dict, alias="gecxConfig"
+    )
     deployment: Optional[DeploymentOverride] = None
 
 

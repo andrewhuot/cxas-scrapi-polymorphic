@@ -32,7 +32,32 @@ The base instructions are written to be **channel-neutral**: they describe *what
 
 ---
 
-## 2. The chat adapter
+## 2. Scaffold when adding a new channel
+
+Bella Notte already ships `chat` and `voice` adapters, but a new channel should
+usually start with the scaffold flow:
+
+```bash
+cxas poly init \
+  --app-dir examples/bella_notte \
+  --channel sms \
+  --deployment-target TWILIO \
+  --modality VOICE_ONLY \
+  --with-callback before_model
+```
+
+That writes a valid `adapters/sms.adapter.yaml` plus a starter eval directory
+and callback file. The generated content is intentionally generic; keep the
+adapter shape, then replace the scaffolded instruction block, eval assertion,
+and callback hint with real SMS behavior.
+
+Use `--dry-run` before writing, `--force` only when replacing known scaffold
+files, and `--with-tool <snake_case_name>` when the channel needs a
+channel-only Python tool.
+
+---
+
+## 3. The chat adapter
 
 `examples/bella_notte/adapters/chat.adapter.yaml` specializes the agent for a web chat widget:
 
@@ -100,7 +125,7 @@ Section by section:
 
 ---
 
-## 3. The voice adapter
+## 4. The voice adapter
 
 `examples/bella_notte/adapters/voice.adapter.yaml` tunes the same agent for telephony:
 
@@ -156,7 +181,63 @@ Notice the symmetry: both adapters `append` a channel block and add a `before_mo
 
 ---
 
-## 4. Build the channels
+## 5. Validate and inspect the channels
+
+Validate first:
+
+```bash
+cxas poly validate --app-dir examples/bella_notte
+```
+
+If validation reports an AD rule, ask for the guided form:
+
+```bash
+cxas poly doctor --app-dir examples/bella_notte
+# or
+cxas poly validate --app-dir examples/bella_notte --explain
+```
+
+Doctor uses the same validators as `validate`; it adds the adapter field, any
+related paths, why the rule exists, and a likely fix shape.
+
+Preview exactly what an adapter changes — without writing anything — with
+`diff`. Use text for review and `--json` for CI/tooling:
+
+```bash
+cxas poly diff chat --app-dir examples/bella_notte
+cxas poly diff chat --app-dir examples/bella_notte --json
+```
+
+```
+Channel: chat   (adapter: adapters/chat.adapter.yaml)
+Summary: 2 agent(s), 2 instruction diff(s), 1 tool add(s), 0 tool remove(s), 1 callback(s), 1 eval merge(s)
+
+agents/Bella_Notte_Host (Bella_Notte_Host)
+  instruction: + N line(s) append (agents/Bella_Notte_Host/instruction.txt)
+  tools (2 -> 3):
+    + send_rich_card
+  callbacks: + before_model (Inject rich card formatting hints...)
+
+tools/
+  + send_rich_card (python, adapters/chat_tools/send_rich_card)
+
+evaluations/
+  + 1 item(s): Rich_Card_Confirmation
+
+gecx-config.json (channel config)
+  ~ model: gemini-3-pro
+
+gecx-config.json (deployment)
+  + channel_type: WEB_UI
+  + modality: CHAT_ONLY
+```
+
+The JSON shape is versioned as `poly-diff/v1` and includes grouped `agents[]`
+deltas plus a flat `deltas[]` list for simple checks.
+
+---
+
+## 6. Build the channels
 
 ```bash
 cxas poly build --app-dir examples/bella_notte --output-dir ./output
@@ -171,38 +252,9 @@ Done. 2 channel(s) written to ./output
 
 Each output directory is a complete project. The chat host now lists `send_rich_card`; the voice host does not. The chat instruction carries the `<channel_chat>` block; the voice instruction carries `<channel_voice>`.
 
-Preview exactly what an adapter changes — without writing anything — with `diff`:
-
-```bash
-cxas poly diff chat --app-dir examples/bella_notte
-```
-
-```
-Channel: chat   (adapter: adapters/chat.adapter.yaml)
-
-agents/Bella_Notte_Host
-  instruction: + N line(s) append
-  tools (2 -> 3):
-    + send_rich_card
-  callbacks: + before_model (Inject rich card formatting hints…)
-
-tools/
-  + send_rich_card
-
-evaluations/
-  + 1 eval(s): Rich_Card_Confirmation
-
-gecx-config.json (channel config)
-  ~ model: gemini-3-pro
-
-gecx-config.json (deployment)
-  + channel_type: WEB_UI
-  + modality: CHAT_ONLY
-```
-
 ---
 
-## 5. Lint, evaluate, and deploy the output
+## 7. Lint, evaluate, and deploy the output
 
 Because each compiled directory *is* a normal project, every existing command works on it unchanged:
 
@@ -225,4 +277,4 @@ This is the payoff of the **[author once at the center](../guides/polymorphism.m
 ## See also
 
 - **[Polymorphism guide](../guides/polymorphism.md)** — concepts and when to use adapters.
-- **[`cxas poly` CLI reference](../../cli/poly.md)** — full command and flag reference.
+- **[`cxas poly` CLI reference](../cli/poly.md)** — full command and flag reference.
