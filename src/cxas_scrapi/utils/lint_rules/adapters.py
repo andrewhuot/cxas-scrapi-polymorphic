@@ -217,7 +217,8 @@ class AdapterPathInScope(_AdapterRule):
     id = "AD008"
     name = "adapter-path-in-scope"
     description = (
-        "Referenced sourceDir/pythonCode paths stay within the project root"
+        "Referenced sourceDir/pythonCode paths are project-relative and stay "
+        "within the project root"
     )
     default_severity = Severity.ERROR
 

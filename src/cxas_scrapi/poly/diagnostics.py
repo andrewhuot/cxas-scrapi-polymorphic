@@ -179,7 +179,7 @@ RULE_GUIDES: Dict[str, RuleGuide] = {
         ),
     ),
     "AD008": RuleGuide(
-        what="An adapter path resolves outside the app root.",
+        what="An adapter path is absolute or resolves outside the app root.",
         why=(
             "Adapter sources must be local project files; absolute paths and "
             "'..' escapes would make builds unsafe and non-portable."

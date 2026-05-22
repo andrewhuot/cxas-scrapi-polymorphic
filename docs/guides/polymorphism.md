@@ -75,7 +75,8 @@ The scaffold flow creates only supported adapter-card fields:
 
 - `adapters/<channel>.adapter.yaml`
 - a starter `adapters/<channel>_evals/` directory unless `--no-eval` is used
-- optional `adapters/<channel>_callbacks/*.py` files referenced by `callbacks`
+- optional `adapters/<channel>_callbacks/*.py` files referenced by `callbacks`,
+  with hook-specific entry functions and typed signatures
 - optional `adapters/<channel>_tools/<tool>/` folders referenced by
   `toolDefinitions`
 
@@ -83,6 +84,10 @@ The scaffold flow creates only supported adapter-card fields:
 `--dry-run` to see the planned files first. The generated text is a starter, not
 production behavior; replace it with real channel instructions, eval assertions,
 tool descriptions, and callback logic.
+
+All generated `sourceDir` and `pythonCode` references are project-relative.
+Keep them that way when editing adapter cards: absolute paths and `..` escapes
+are rejected so the same card builds on another machine or in CI.
 
 ---
 
