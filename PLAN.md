@@ -128,4 +128,4 @@ uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd
   - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd_alignment_build_c72c_readiness_20260522/chat`
   - `uv run --with-editable . --with alive-progress cxas lint --app-dir /tmp/poly_prd_alignment_build_c72c_readiness_20260522/voice`
 - No blockers.
-- Draft PR: https://github.com/GoogleCloudPlatform/cxas-scrapi/pull/172
+- Draft PR: https://github.com/andrewhuot/cxas-scrapi-polymorphic/pull/7
