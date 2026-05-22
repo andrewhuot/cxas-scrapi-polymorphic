@@ -264,3 +264,6 @@ class CompiledAgentConfig(BaseModel):
     # python source text.  Written to disk under each agent's standard
     # callback directory tree.
     callback_code: Dict[str, str] = Field(default_factory=dict)
+    # Build-provenance metadata folded into the ``.poly_build.json`` marker
+    # (engine version, adapter card path + sha, base agents, applied deltas).
+    provenance: Dict[str, Any] = Field(default_factory=dict)

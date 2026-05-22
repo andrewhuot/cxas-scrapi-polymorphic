@@ -20,11 +20,14 @@ I/O — no ``google.cloud.*`` imports and no network access.
 """
 
 import copy
+import hashlib
 import json
 import re
 import shutil
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -504,9 +507,12 @@ class PolymorphismEngine:
                     "audio" if "VOICE" in modality.upper() else "text"
                 )
 
+        app_config = copy.deepcopy(self.base.app_json)
+        self._resolve_app_identity(app_config, adapter, channel)
+
         return CompiledAgentConfig(
             channel=channel,
-            app_config=copy.deepcopy(self.base.app_json),
+            app_config=app_config,
             gecx_config=gecx_config,
             agents=agent_configs,
             agent_instructions=instructions,
@@ -518,6 +524,7 @@ class PolymorphismEngine:
             evaluation_datasets=datasets,
             deployment=deployment,
             callback_code=callback_code,
+            provenance=self._build_provenance(adapter, card_path),
         )
 
     def compile_all(self) -> Dict[str, CompiledAgentConfig]:
@@ -839,3 +846,80 @@ class PolymorphismEngine:
             if wwc.modality is not None and "modality" not in out:
                 out["modality"] = wwc.modality
         return out
+
+    @staticmethod
+    def _resolve_app_identity(
+        app_config: Dict[str, Any],
+        adapter: AdapterCard,
+        channel: str,
+    ) -> None:
+        """Give the compiled app a per-channel identity, in place.
+
+        ``displayName`` comes from an explicit ``appIdentity.displayName`` or,
+        by default, the adapter's ``metadata.displayName`` so two channels are
+        never indistinguishable as the same deployed app.  ``name`` comes from
+        an explicit ``appIdentity.name`` or a deterministic uuid5 of the base
+        name plus channel (the same per-channel id pattern ``poly init`` uses
+        for scaffolded tools), so rebuilds stay stable and redeploys stay
+        idempotent.
+        """
+        identity = adapter.app_identity
+        base_name = str(
+            app_config.get("displayName") or adapter.metadata.display_name
+        )
+
+        display: Optional[str] = None
+        if identity is not None and identity.display_name:
+            display = identity.display_name
+        elif adapter.metadata.display_name:
+            display = adapter.metadata.display_name
+        if display:
+            app_config["displayName"] = display
+
+        if identity is not None and identity.name:
+            app_config["name"] = identity.name
+        else:
+            app_config["name"] = str(
+                uuid.uuid5(uuid.NAMESPACE_URL, f"{base_name}:{channel}")
+            )
+
+    def _build_provenance(
+        self, adapter: AdapterCard, card_path: Optional[Path]
+    ) -> Dict[str, Any]:
+        """Build the build-provenance block recorded in ``.poly_build.json``."""
+        assert self.base is not None
+        try:
+            version = importlib_metadata.version("cxas-scrapi")
+        except Exception:  # pragma: no cover - environment dependent
+            version = "unknown"
+
+        adapter_rel = ""
+        adapter_sha = ""
+        if card_path is not None:
+            try:
+                adapter_rel = str(Path(card_path).relative_to(self.app_dir))
+            except ValueError:
+                adapter_rel = Path(card_path).name
+            try:
+                adapter_sha = hashlib.sha256(
+                    Path(card_path).read_bytes()
+                ).hexdigest()
+            except OSError:
+                adapter_sha = ""
+
+        return {
+            "engine_version": version,
+            "adapter_card": adapter_rel,
+            "adapter_sha256": adapter_sha,
+            "base_agents": sorted(self.base.agents.keys()),
+            "applied_deltas": {
+                "instruction_diffs": len(adapter.instruction_diffs),
+                "tools_added": sum(len(m.add) for m in adapter.tools),
+                "tools_removed": sum(len(m.remove) for m in adapter.tools),
+                "tool_definitions": len(adapter.tool_definitions),
+                "model_overrides": len(adapter.model_overrides),
+                "callbacks": len(adapter.callbacks),
+                "evaluations": len(adapter.evaluations),
+                "deployment": adapter.deployment is not None,
+            },
+        }
